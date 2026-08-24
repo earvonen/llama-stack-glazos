@@ -1,0 +1,84 @@
+# In-cluster Kubernetes/OpenShift MCP (SSE transport on /sse).
+# Image: quay.io/mcp-servers/kubernetes-mcp-server — uses the pod's service account to talk to the API.
+# RBAC below is namespace-scoped read-only; extend the Role if you need create/patch/delete tools.
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: kubernetes-mcp
+  namespace: glazos
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: kubernetes-mcp-namespace-reader
+  namespace: glazos
+rules:
+  - apiGroups: ["", "apps", "batch", "networking.k8s.io", "rbac.authorization.k8s.io", "route.openshift.io", "tekton.dev"]
+    resources: ["*"]
+    verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: kubernetes-mcp-namespace-reader
+  namespace: glazos
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: kubernetes-mcp-namespace-reader
+subjects:
+  - kind: ServiceAccount
+    name: kubernetes-mcp
+    namespace: glazos
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: kubernetes-mcp
+  namespace: glazos
+  labels:
+    app: kubernetes-mcp
+spec:
+  selector:
+    app: kubernetes-mcp
+  ports:
+    - name: http
+      port: 8080
+      targetPort: 8080
+      protocol: TCP
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: kubernetes-mcp
+  namespace: glazos
+  labels:
+    app: kubernetes-mcp
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: kubernetes-mcp
+  template:
+    metadata:
+      labels:
+        app: kubernetes-mcp
+    spec:
+      serviceAccountName: kubernetes-mcp
+      automountServiceAccountToken: true
+      containers:
+        - name: kubernetes-mcp-server
+          image: quay.io/mcp-servers/kubernetes-mcp-server:2025-11-24
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8080
+              protocol: TCP
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+          resources: {}
+      restartPolicy: Always
+      dnsPolicy: ClusterFirst
+      terminationGracePeriodSeconds: 30

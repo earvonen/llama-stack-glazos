@@ -1,0 +1,101 @@
+# Requires the RHOAI-managed Llama Stack Operator (DataScienceCluster
+# spec.components.llamastackoperator.managementState: Managed).
+apiVersion: llamastack.io/v1alpha1
+kind: LlamaStackDistribution
+metadata:
+  name: llamastack
+  namespace: glazos
+spec:
+  replicas: 1
+  server:
+    distribution:
+      image: registry.redhat.io/rhoai/odh-llama-stack-core-rhel9:v3.4
+    userConfig:
+      configMapName: llamastack-server-config
+    storage:
+      size: 20Gi
+      mountPath: "/.llama"
+    containerSpec:
+      port: 8321
+      resources:
+        requests:
+          cpu: "500m"
+          memory: "2Gi"
+        limits:
+          cpu: "2"
+          memory: "8Gi"
+      env:
+        - name: SQLITE_STORE_DIR
+          value: "/.llama/distributions/starter"
+        - name: VLLM_URL
+          valueFrom:
+            configMapKeyRef:
+              name: llamastack-mcp-endpoints
+              key: VLLM_URL
+        - name: VLLM_API_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: llamastack-credentials
+              key: vllm-api-token
+        - name: VLLM_TLS_VERIFY
+          value: "false"
+        - name: TAVILY_SEARCH_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: llamastack-credentials
+              key: tavily-search-api-key
+        - name: MCP_GITHUB_SSE_URL
+          valueFrom:
+            configMapKeyRef:
+              name: llamastack-mcp-endpoints
+              key: MCP_GITHUB_SSE_URL
+        - name: MCP_OPENSHIFT_SSE_URL
+          valueFrom:
+            configMapKeyRef:
+              name: llamastack-mcp-endpoints
+              key: MCP_OPENSHIFT_SSE_URL
+        - name: MCP_AAP_JOB_MGMT_URL
+          valueFrom:
+            configMapKeyRef:
+              name: llamastack-mcp-endpoints
+              key: MCP_AAP_JOB_MGMT_URL
+        - name: MCP_AAP_INVENTORY_MGMT_URL
+          valueFrom:
+            configMapKeyRef:
+              name: llamastack-mcp-endpoints
+              key: MCP_AAP_INVENTORY_MGMT_URL
+        - name: MCP_AAP_SYSTEM_MONITOR_URL
+          valueFrom:
+            configMapKeyRef:
+              name: llamastack-mcp-endpoints
+              key: MCP_AAP_SYSTEM_MONITOR_URL
+        - name: MCP_AAP_USER_MGMT_URL
+          valueFrom:
+            configMapKeyRef:
+              name: llamastack-mcp-endpoints
+              key: MCP_AAP_USER_MGMT_URL
+        - name: MCP_AAP_SECURITY_URL
+          valueFrom:
+            configMapKeyRef:
+              name: llamastack-mcp-endpoints
+              key: MCP_AAP_SECURITY_URL
+        - name: MCP_AAP_PLATFORM_CONFIG_URL
+          valueFrom:
+            configMapKeyRef:
+              name: llamastack-mcp-endpoints
+              key: MCP_AAP_PLATFORM_CONFIG_URL
+        - name: MCP_LINUX_URL
+          valueFrom:
+            configMapKeyRef:
+              name: llamastack-mcp-endpoints
+              key: MCP_LINUX_URL
+        - name: MCP_SATELLITE_URL
+          valueFrom:
+            configMapKeyRef:
+              name: llamastack-mcp-endpoints
+              key: MCP_SATELLITE_URL
+        - name: MCP_ZABBIX_URL
+          valueFrom:
+            configMapKeyRef:
+              name: llamastack-mcp-endpoints
+              key: MCP_ZABBIX_URL

@@ -1,0 +1,113 @@
+# In-cluster GitHub MCP (HTTP transport): github-mcp-server's HTTP mode reads the PAT from the
+# incoming Authorization header only — it does not use GITHUB_PERSONAL_ACCESS_TOKEN from the
+# environment for those requests (that env is for stdio mode). Llama Stack's connector URL has no
+# PAT, so nginx (this pod's injection layer) adds Bearer … from Secret github-mcp-pat before
+# proxying to github-mcp-server on :8082.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: github-mcp-nginx-template
+  namespace: glazos
+data:
+  default.conf.template: |
+    server {
+      listen 8080;
+      location / {
+        proxy_pass http://127.0.0.1:8082;
+        proxy_http_version 1.1;
+        proxy_set_header Host 127.0.0.1;
+        proxy_set_header X-Forwarded-Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header Authorization "Bearer ${GITHUB_PERSONAL_ACCESS_TOKEN}";
+        proxy_set_header X-MCP-Tools "";
+        proxy_set_header X-MCP-Toolsets "";
+        proxy_set_header X-MCP-Exclude-Tools "";
+        proxy_set_header X-MCP-Readonly "";
+        proxy_set_header X-MCP-Lockdown "";
+        proxy_set_header X-MCP-Insiders "";
+        proxy_set_header X-MCP-Features "";
+        proxy_buffering off;
+        proxy_read_timeout 86400s;
+        proxy_send_timeout 86400s;
+      }
+    }
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: github-mcp
+  namespace: glazos
+  labels:
+    app: github-mcp
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: github-mcp
+  template:
+    metadata:
+      labels:
+        app: github-mcp
+    spec:
+      securityContext:
+        fsGroup: 1000850000
+      containers:
+        - name: github-mcp-server
+          image: ghcr.io/github/github-mcp-server:latest
+          args: ["http", "--port=8082"]
+          ports:
+            - containerPort: 8082
+              protocol: TCP
+        - name: nginx
+          image: nginxinc/nginx-unprivileged:1.27-alpine
+          ports:
+            - containerPort: 8080
+              protocol: TCP
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+          env:
+            - name: GITHUB_PERSONAL_ACCESS_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: github-mcp-pat
+                  key: GITHUB_PERSONAL_ACCESS_TOKEN
+          volumeMounts:
+            - name: nginx-templates
+              mountPath: /etc/nginx/templates
+              readOnly: true
+            - name: nginx-conf-d
+              mountPath: /etc/nginx/conf.d
+            - name: nginx-cache
+              mountPath: /var/cache/nginx
+            - name: nginx-run
+              mountPath: /var/run
+      volumes:
+        - name: nginx-templates
+          configMap:
+            name: github-mcp-nginx-template
+        - name: nginx-conf-d
+          emptyDir: {}
+        - name: nginx-cache
+          emptyDir: {}
+        - name: nginx-run
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: github-mcp
+  namespace: glazos
+  labels:
+    app: github-mcp
+spec:
+  selector:
+    app: github-mcp
+  ports:
+    - name: http
+      port: 8080
+      targetPort: 8080
+      protocol: TCP

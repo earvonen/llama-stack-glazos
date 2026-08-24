@@ -1,0 +1,24 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: glazos
+
+resources:
+  - namespace.yaml
+  - github-mcp.yaml
+  - kubernetes-mcp.yaml
+  - aap-mcp-proxy.yaml
+  - linux-mcp.yaml
+  - satellite-mcp.yaml
+  - zabbix-mcp.yaml
+  - llamastackdistribution.yaml
+  - route.yaml
+# Secrets, URLs (llamastack-mcp-endpoints), aap-mcp-proxy-nginx-template,
+# satellite-mcp-config, and zabbix-mcp-config are applied from .env by deploy-openshift.sh
+
+configMapGenerator:
+  - name: llamastack-server-config
+    files:
+      - config.yaml=config/config.yaml
+    options:
+      disableNameSuffixHash: true

@@ -1,0 +1,63 @@
+version: 2
+distro_name: starter
+# Inference: external MiniMax vLLM-compatible OpenAI /v1 endpoint.
+apis:
+- inference
+- tool_runtime
+providers:
+  inference:
+  - provider_id: vllm
+    provider_type: remote::vllm
+    config:
+      base_url: ${env.VLLM_URL:=}
+      max_tokens: ${env.VLLM_MAX_TOKENS:=4096}
+      api_token: ${env.VLLM_API_TOKEN:=fake}
+      tls_verify: ${env.VLLM_TLS_VERIFY:=true}
+  tool_runtime:
+  - provider_id: model-context-protocol
+    provider_type: remote::model-context-protocol
+  - provider_id: tavily-search
+    provider_type: remote::tavily-search
+    config:
+      api_key: ${env.TAVILY_SEARCH_API_KEY:=}
+tool_groups:
+- toolgroup_id: builtin::websearch
+  provider_id: tavily-search
+# Connectors populate the Connectors API (GET /v1beta/connectors, …/tools on 0.7.x).
+# Post-deploy, register the same URLs as MCP tool groups (see llama-stack-preparation.sh).
+connectors:
+- connector_type: mcp
+  connector_id: github
+  url: ${env.MCP_GITHUB_SSE_URL:=}
+- connector_type: mcp
+  connector_id: openshift
+  url: ${env.MCP_OPENSHIFT_SSE_URL:=}
+- connector_type: mcp
+  connector_id: aap-jobs
+  url: ${env.MCP_AAP_JOB_MGMT_URL:=}
+- connector_type: mcp
+  connector_id: aap-inventory
+  url: ${env.MCP_AAP_INVENTORY_MGMT_URL:=}
+- connector_type: mcp
+  connector_id: aap-monitoring
+  url: ${env.MCP_AAP_SYSTEM_MONITOR_URL:=}
+- connector_type: mcp
+  connector_id: aap-users
+  url: ${env.MCP_AAP_USER_MGMT_URL:=}
+- connector_type: mcp
+  connector_id: aap-security
+  url: ${env.MCP_AAP_SECURITY_URL:=}
+- connector_type: mcp
+  connector_id: aap-platform
+  url: ${env.MCP_AAP_PLATFORM_CONFIG_URL:=}
+- connector_type: mcp
+  connector_id: linux
+  url: ${env.MCP_LINUX_URL:=}
+- connector_type: mcp
+  connector_id: satellite
+  url: ${env.MCP_SATELLITE_URL:=}
+- connector_type: mcp
+  connector_id: zabbix
+  url: ${env.MCP_ZABBIX_URL:=}
+# Chat/completions "model" must be the stack id: vllm/<vLLM model id>.
+# Omit registered_resources.models to auto-discover models from VLLM_URL at startup.

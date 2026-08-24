@@ -1,0 +1,96 @@
+# Red Hat Linux MCP Server — HTTP transport for Llama Stack; SSH to target RHEL hosts.
+# Image: quay.io/redhat-services-prod/rhel-lightspeed-tenant/linux-mcp-server:latest
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: linux-mcp
+  namespace: glazos
+  labels:
+    app: linux-mcp
+spec:
+  selector:
+    app: linux-mcp
+  ports:
+    - name: http
+      port: 8080
+      targetPort: 8080
+      protocol: TCP
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: linux-mcp
+  namespace: glazos
+  labels:
+    app: linux-mcp
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: linux-mcp
+  template:
+    metadata:
+      labels:
+        app: linux-mcp
+    spec:
+      containers:
+        - name: linux-mcp-server
+          image: quay.io/redhat-services-prod/rhel-lightspeed-tenant/linux-mcp-server:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8080
+              protocol: TCP
+          env:
+            - name: LINUX_MCP_TRANSPORT
+              value: "http"
+            - name: LINUX_MCP_HOST
+              value: "0.0.0.0"
+            - name: LINUX_MCP_PORT
+              value: "8080"
+            - name: LINUX_MCP_USER
+              valueFrom:
+                secretKeyRef:
+                  name: linux-mcp-credentials
+                  key: LINUX_MCP_USER
+            - name: LINUX_MCP_KEY_PASSPHRASE
+              valueFrom:
+                secretKeyRef:
+                  name: linux-mcp-credentials
+                  key: LINUX_MCP_KEY_PASSPHRASE
+                  optional: true
+          securityContext:
+            runAsUser: 1001
+            runAsGroup: 0
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+          volumeMounts:
+            - name: ssh-key
+              mountPath: /var/lib/mcp/.ssh/id_ed25519
+              subPath: id_ed25519
+              readOnly: true
+            - name: ssh-config
+              mountPath: /var/lib/mcp/.ssh/config
+              subPath: ssh_config
+              readOnly: true
+            - name: logs
+              mountPath: /var/lib/mcp/.local/share/linux-mcp-server/logs
+          resources: {}
+      volumes:
+        - name: ssh-key
+          secret:
+            secretName: linux-mcp-credentials
+            items:
+              - key: id_ed25519
+                path: id_ed25519
+                mode: 0400
+        - name: ssh-config
+          secret:
+            secretName: linux-mcp-credentials
+            items:
+              - key: ssh_config
+                path: ssh_config
+                mode: 0400
+        - name: logs
+          emptyDir: {}
