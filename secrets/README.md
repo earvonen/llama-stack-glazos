@@ -36,7 +36,7 @@ Optional overrides for individual AAP toolset connector URLs (default: `${MCP_AA
 
 - `MCP_AAP_JOB_MGMT_URL`, `MCP_AAP_INVENTORY_MGMT_URL`, `MCP_AAP_SYSTEM_MONITOR_URL`, `MCP_AAP_USER_MGMT_URL`, `MCP_AAP_SECURITY_URL`, `MCP_AAP_PLATFORM_CONFIG_URL`
 
-`llama-stack-preparation.sh` uses the same `.env` URL variables for tool group registration.
+Those same env vars feed `tool_groups` and `connectors` in `openshift/config/config.yaml` at Llama Stack startup.
 
 ### Credentials
 
@@ -53,8 +53,8 @@ Optional overrides for individual AAP toolset connector URLs (default: `${MCP_AA
 | `FOREMAN_USERNAME` | Satellite MCP auth header |
 | `FOREMAN_TOKEN` | Satellite personal access token |
 | `SATELLITE_CA_FILE` | Optional path to Satellite CA PEM file |
-| `ZABBIX_API_TOKEN` | Zabbix API token (MCP server config) |
-| `ZABBIX_MCP_AUTH_TOKEN` | Bearer token for Zabbix MCP HTTP auth |
+| `ZABBIX_API_TOKEN` | Zabbix API token (written into `zabbix-mcp-config` ConfigMap as `config.toml`) |
+| `ZABBIX_MCP_AUTH_TOKEN` | Bearer token for Zabbix MCP HTTP auth (`zabbix-mcp-credentials` Secret) |
 
 Multiline values (SSH keys, CA bundles) use **file paths** on the machine running `deploy-openshift.sh`.
 

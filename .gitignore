@@ -1,2 +1,4 @@
 _ref_*/
 .env
+__pycache__/
+*.pyc

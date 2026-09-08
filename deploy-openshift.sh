@@ -40,15 +40,15 @@ oc apply -f "${KUSTOMIZE_DIR}/namespace.yaml"
 echo "==> Applying secrets and config from ${ENV_FILE}" >&2
 
 # URLs (defaults match openshift Service names in this overlay).
-VLLM_URL="${VLLM_URL:-https://minimax-m27-tm-llm.apps.dgx.eu.arrow.lab/v1}"
+VLLM_URL="${VLLM_URL:-https://llm.example.com/v1}"
 MCP_GITHUB_SSE_URL="${MCP_GITHUB_SSE_URL:-http://github-mcp:8080/}"
 MCP_OPENSHIFT_SSE_URL="${MCP_OPENSHIFT_SSE_URL:-http://kubernetes-mcp:8080/sse}"
 MCP_AAP_PROXY_BASE_URL="${MCP_AAP_PROXY_BASE_URL:-http://aap-mcp-proxy:8080}"
 MCP_LINUX_URL="${MCP_LINUX_URL:-http://linux-mcp:8080/mcp}"
 MCP_SATELLITE_URL="${MCP_SATELLITE_URL:-http://satellite-mcp:8080/mcp/sse}"
-MCP_ZABBIX_URL="${MCP_ZABBIX_URL:-http://zabbix-mcp:8080/mcp}"
-AAP_MCP_BASE_URL="${AAP_MCP_BASE_URL:-https://rh-aap-01.eu.arrow.lab:8448}"
-AAP_MCP_HOST="${AAP_MCP_HOST:-rh-aap-01.eu.arrow.lab}"
+MCP_ZABBIX_URL="${MCP_ZABBIX_URL:-http://zabbix-mcp:8080/sse}"
+AAP_MCP_BASE_URL="${AAP_MCP_BASE_URL:-https://aap.example.com}"
+AAP_MCP_HOST="${AAP_MCP_HOST:-aap.example.com}"
 
 AAP_PROXY="${MCP_AAP_PROXY_BASE_URL%/}"
 MCP_AAP_JOB_MGMT_URL="${MCP_AAP_JOB_MGMT_URL:-${AAP_PROXY}/job_management/mcp}"
@@ -147,8 +147,7 @@ oc create secret generic satellite-mcp-credentials -n "${NAMESPACE}" \
   --dry-run=client -o yaml | oc apply -f -
 
 apply_literal_secret zabbix-mcp-credentials \
-  --from-literal=MCP_AUTH_TOKEN="${ZABBIX_MCP_AUTH_TOKEN}" \
-  --from-literal=ZABBIX_API_TOKEN="${ZABBIX_API_TOKEN}"
+  --from-literal=MCP_AUTH_TOKEN="${ZABBIX_MCP_AUTH_TOKEN}"
 
 oc create configmap satellite-mcp-config -n "${NAMESPACE}" \
   --from-literal=SATELLITE_URL="${SATELLITE_URL}" \
@@ -184,3 +183,18 @@ oc kustomize "${KUSTOMIZE_DIR}" \
 
 echo "==> Deployments in ${NAMESPACE}:" >&2
 oc get deploy,pods -n "${NAMESPACE}"
+
+ZABBIX_MCP_IMAGE="${ZABBIX_MCP_IMAGE:-}"
+ZABBIX_MCP_GIT_REF="${ZABBIX_MCP_GIT_REF:-v1.36.1}"
+if [[ -n "${ZABBIX_MCP_IMAGE}" ]]; then
+  echo "==> Setting zabbix-mcp image to ZABBIX_MCP_IMAGE" >&2
+  oc set image deployment/zabbix-mcp zabbix-mcp-server="${ZABBIX_MCP_IMAGE}" -n "${NAMESPACE}"
+  oc rollout status deployment/zabbix-mcp -n "${NAMESPACE}" --timeout=5m
+else
+  echo "==> Building zabbix-mcp-server from GitHub (${ZABBIX_MCP_GIT_REF}; ghcr.io image is private)" >&2
+  oc patch buildconfig zabbix-mcp-server -n "${NAMESPACE}" --type merge \
+    -p "{\"spec\":{\"source\":{\"git\":{\"ref\":\"${ZABBIX_MCP_GIT_REF}\"}}}}"
+  oc start-build zabbix-mcp-server -n "${NAMESPACE}" --wait
+  oc rollout restart deployment/zabbix-mcp -n "${NAMESPACE}"
+  oc rollout status deployment/zabbix-mcp -n "${NAMESPACE}" --timeout=5m
+fi

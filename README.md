@@ -37,7 +37,7 @@ Default namespace: **`glazos`**.
 | `openshift/satellite-mcp.yaml` | Satellite MCP + nginx Foreman header injection |
 | `openshift/zabbix-mcp.yaml` | Zabbix MCP + nginx Bearer injection |
 | `deploy-openshift.sh` | Deploy with OpenShift `fsGroup` patching |
-| `llama-stack-preparation.sh` | Register all MCP tool groups |
+| `test-zabbix-via-llamastack.sh` | Verify Llama Stack → Zabbix MCP (connector tools + optional chat) |
 | `secrets/README.md` | `.env` variables and rotation notes |
 
 ## Configure before deploy
@@ -54,15 +54,7 @@ cp .env.example .env   # first time only
 
 Override namespace: `OPENSHIFT_NAMESPACE=my-ns ./deploy-openshift.sh`
 
-## Post-deploy: register MCP tool groups
-
-```bash
-oc port-forward -n glazos svc/llamastack-service 8321:http
-export LLAMA_STACK_BASE_URL=http://127.0.0.1:8321
-./llama-stack-preparation.sh
-```
-
-Web search uses `builtin::websearch` from stack config — no MCP registration needed.
+MCP tool groups and web search are declared in `openshift/config/config.yaml` (`tool_groups` section) and pick up MCP URLs from the `llamastack-mcp-endpoints` ConfigMap at startup — no separate registration step.
 
 ## Verify
 

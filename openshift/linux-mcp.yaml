@@ -34,6 +34,8 @@ spec:
       labels:
         app: linux-mcp
     spec:
+      securityContext:
+        fsGroup: 1000850000
       containers:
         - name: linux-mcp-server
           image: quay.io/redhat-services-prod/rhel-lightspeed-tenant/linux-mcp-server:latest
@@ -60,8 +62,6 @@ spec:
                   key: LINUX_MCP_KEY_PASSPHRASE
                   optional: true
           securityContext:
-            runAsUser: 1001
-            runAsGroup: 0
             allowPrivilegeEscalation: false
             capabilities:
               drop: ["ALL"]

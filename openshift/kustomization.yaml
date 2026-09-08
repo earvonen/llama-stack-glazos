@@ -10,6 +10,7 @@ resources:
   - aap-mcp-proxy.yaml
   - linux-mcp.yaml
   - satellite-mcp.yaml
+  - zabbix-mcp-build.yaml
   - zabbix-mcp.yaml
   - llamastackdistribution.yaml
   - route.yaml

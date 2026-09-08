@@ -1,0 +1,31 @@
+# ghcr.io/initmax/zabbix-mcp-server is private — build from upstream Git into the
+# namespace ImageStream (see deploy-openshift.sh).
+apiVersion: image.openshift.io/v1
+kind: ImageStream
+metadata:
+  name: zabbix-mcp-server
+  namespace: glazos
+spec: {}
+---
+apiVersion: build.openshift.io/v1
+kind: BuildConfig
+metadata:
+  name: zabbix-mcp-server
+  namespace: glazos
+  labels:
+    app: zabbix-mcp
+spec:
+  source:
+    type: Git
+    git:
+      uri: https://github.com/initMAX/zabbix-mcp-server.git
+      ref: v1.36.1
+  strategy:
+    type: Docker
+    dockerStrategy: {}
+  output:
+    to:
+      kind: ImageStreamTag
+      name: zabbix-mcp-server:latest
+  triggers:
+    - type: ConfigChange
