@@ -1,11 +1,16 @@
 #!/usr/bin/env bash
 # Test GLAZOS Llama Stack → Zabbix MCP integration (server-side Responses API).
 #
-# Quick check (no LLM):
-#   ./test-zabbix-via-llamastack.sh --check-only
+# Python (default):
+#   ./test-zabbix-via-llamastack.sh [--check-only]
 #
-# Full test (single POST /v1/responses; Llama Stack orchestrates MCP):
-#   ./test-zabbix-via-llamastack.sh
+# Pure shell (curl + jq, no Python):
+#   ./scripts/test_zabbix_via_llamastack.sh [--check-only]
+#
+# Single curl only:
+#   LLAMA_STACK_BASE_URL=https://llamastack.example.com \\
+#   LLAMA_STACK_MODEL=vllm/<model-id> \\
+#     ./scripts/test_zabbix_via_llamastack.curl.sh | jq .
 #
 # Optional env:
 #   LLAMA_STACK_BASE_URL      override Route URL

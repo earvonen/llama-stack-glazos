@@ -1,5 +1,23 @@
 # Red Hat Linux MCP Server — HTTP transport for Llama Stack; SSH to target RHEL hosts.
 # Image: quay.io/redhat-services-prod/rhel-lightspeed-tenant/linux-mcp-server:latest
+#
+# HTTP transport requires LINUX_MCP_POLICY_PATH; without it all tool calls are denied.
+# Lab policy below: all tools on all remote hosts via ssh_default (mounted SSH key + LINUX_MCP_USER).
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: linux-mcp-policy
+  namespace: glazos
+  labels:
+    app: linux-mcp
+data:
+  policy.yaml: |
+    rules:
+      - all_users: true
+        host: "*"
+        tools: ["*"]
+        action: ssh_default
 ---
 apiVersion: v1
 kind: Service
@@ -61,6 +79,12 @@ spec:
                   name: linux-mcp-credentials
                   key: LINUX_MCP_KEY_PASSPHRASE
                   optional: true
+            - name: LINUX_MCP_POLICY_PATH
+              value: /etc/linux-mcp-server/policy.yaml
+            - name: LINUX_MCP_SSH_KEY_PATH
+              value: /var/lib/mcp/.ssh/id_ed25519
+            - name: LINUX_MCP_VERIFY_HOST_KEYS
+              value: "false"
           securityContext:
             allowPrivilegeEscalation: false
             capabilities:
@@ -76,8 +100,18 @@ spec:
               readOnly: true
             - name: logs
               mountPath: /var/lib/mcp/.local/share/linux-mcp-server/logs
+            - name: auth-policy
+              mountPath: /etc/linux-mcp-server/policy.yaml
+              subPath: policy.yaml
+              readOnly: true
           resources: {}
       volumes:
+        - name: auth-policy
+          configMap:
+            name: linux-mcp-policy
+            items:
+              - key: policy.yaml
+                path: policy.yaml
         - name: ssh-key
           secret:
             secretName: linux-mcp-credentials

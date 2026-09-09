@@ -5,6 +5,8 @@ Steps:
   1. Resolve the Llama Stack Route (or use LLAMA_STACK_BASE_URL).
   2. GET /v1beta/connectors/zabbix/tools — connector reachability (--check-only).
   3. POST /v1/responses — single prompt; Llama Stack executes Zabbix MCP server-side.
+
+Single curl (see scripts/test_zabbix_via_llamastack.curl.sh; set LLAMA_STACK_BASE_URL and LLAMA_STACK_MODEL):
 """
 from __future__ import annotations
 
