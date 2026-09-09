@@ -1,13 +1,10 @@
 #!/usr/bin/env python3
-"""Verify GLAZOS Llama Stack can reach Zabbix via the mcp-zabbix tool group.
+"""Verify GLAZOS Llama Stack can reach Zabbix via server-side Responses API orchestration.
 
 Steps:
   1. Resolve the Llama Stack Route (or use LLAMA_STACK_BASE_URL).
-  2. GET /v1beta/connectors/zabbix/tools — connector reachability.
-  3. GET /v1/tools?toolgroup_id=mcp-zabbix — registered tool group.
-  4. POST /v1/chat/completions — ask the model to query Zabbix hosts.
-  5. Invoke tool_calls via in-cluster Zabbix MCP (oc exec + curl).
-  6. POST chat again with tool results and print the answer.
+  2. GET /v1beta/connectors/zabbix/tools — connector reachability (--check-only).
+  3. POST /v1/responses — single prompt; Llama Stack executes Zabbix MCP server-side.
 """
 from __future__ import annotations
 
@@ -18,17 +15,17 @@ import ssl
 import subprocess
 import sys
 import urllib.error
-import urllib.parse
 import urllib.request
-from pathlib import Path
 from typing import Any
 
-ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_NAMESPACE = "glazos"
-DEFAULT_DEPLOY = "llamastack"
-DEFAULT_ZABBIX_MCP = "http://zabbix-mcp:8080/sse"
-TOOLGROUP_ID = "mcp-zabbix"
-MAX_CHAT_TURNS = int(os.environ.get("MAX_CHAT_TURNS", "6"))
+DEFAULT_CONNECTOR_ID = "zabbix"
+DEFAULT_MAX_INFER_ITERS = int(os.environ.get("MAX_INFER_ITERS", "10"))
+PROMPT = (
+    "Use the Zabbix tools to list a small sample of monitored hosts "
+    "(at most 5). Return host names and their status. "
+    "You must call a Zabbix tool; do not guess."
+)
 
 
 def _ssl_context(insecure: bool) -> ssl.SSLContext | None:
@@ -90,41 +87,6 @@ def _resolve_base_url(namespace: str) -> str:
     return f"https://{_route_host(namespace)}"
 
 
-def _invoke_zabbix_tool(
-    tool_name: str,
-    arguments: dict[str, Any],
-    *,
-    namespace: str,
-    deploy: str,
-    mcp_url: str,
-) -> str:
-    helper = Path(__file__).resolve().parent / "_invoke_zabbix_sse_mcp.py"
-    cmd = [
-        "oc",
-        "exec",
-        "-i",
-        "-n",
-        namespace,
-        f"deploy/{deploy}",
-        "--",
-        "python3",
-        "-",
-        mcp_url,
-        tool_name,
-        json.dumps(arguments),
-    ]
-    proc = subprocess.run(
-        cmd,
-        check=True,
-        capture_output=True,
-        text=True,
-        input=helper.read_text(encoding="utf-8"),
-    )
-    if proc.stderr.strip():
-        print(proc.stderr.strip(), file=sys.stderr)
-    return proc.stdout.strip()
-
-
 def _pick_model(base_url: str, *, insecure: bool) -> str:
     models = _get_json(f"{base_url}/v1/models", insecure=insecure)
     ids = [m.get("id", "") for m in models.get("data", []) if m.get("id")]
@@ -163,8 +125,8 @@ def _tools_to_openai(tools_payload: Any) -> list[dict[str, Any]]:
     return out
 
 
-def _check_connectors(base_url: str, *, insecure: bool) -> list[dict[str, Any]]:
-    url = f"{base_url}/v1beta/connectors/zabbix/tools"
+def _check_connectors(base_url: str, connector_id: str, *, insecure: bool) -> list[dict[str, Any]]:
+    url = f"{base_url}/v1beta/connectors/{connector_id}/tools"
     print(f"==> GET {url}", file=sys.stderr)
     payload = _get_json(url, insecure=insecure)
     tools = _tools_to_openai(payload)
@@ -174,110 +136,89 @@ def _check_connectors(base_url: str, *, insecure: bool) -> list[dict[str, Any]]:
     return tools
 
 
-def _check_toolgroup(base_url: str, *, insecure: bool) -> list[dict[str, Any]]:
-    query = urllib.parse.urlencode({"toolgroup_id": TOOLGROUP_ID})
-    url = f"{base_url}/v1/tools?{query}"
-    print(f"==> GET {url}", file=sys.stderr)
-    try:
-        payload = _get_json(url, insecure=insecure)
-    except urllib.error.HTTPError as exc:
-        if exc.code == 404:
-            print(
-                f"    tool group {TOOLGROUP_ID} not registered (404) — using connector tools",
-                file=sys.stderr,
-            )
-            return []
-        raise
-    tools = _tools_to_openai(payload)
-    print(f"    tool group tools: {len(tools)}", file=sys.stderr)
-    if not tools:
-        raise RuntimeError(f"tool group {TOOLGROUP_ID} returned no tools")
-    return tools
+def _mcp_tool_spec(connector_id: str) -> dict[str, Any]:
+    tool: dict[str, Any] = {
+        "type": "mcp",
+        "server_label": connector_id,
+        "connector_id": connector_id,
+        "require_approval": "never",
+    }
+    auth = os.environ.get("ZABBIX_MCP_AUTHORIZATION", "").strip()
+    if auth:
+        tool["authorization"] = auth
+    return tool
 
 
-def _run_chat(
+def _extract_output_text(response: dict[str, Any]) -> str:
+    if response.get("output_text"):
+        return str(response["output_text"]).strip()
+
+    parts: list[str] = []
+    for item in response.get("output") or []:
+        if not isinstance(item, dict):
+            continue
+        if item.get("type") == "message":
+            for block in item.get("content") or []:
+                if isinstance(block, dict) and block.get("type") == "output_text":
+                    text = block.get("text", "")
+                    if text:
+                        parts.append(str(text))
+    return "\n".join(parts).strip()
+
+
+def _log_mcp_activity(response: dict[str, Any]) -> None:
+    for item in response.get("output") or []:
+        if not isinstance(item, dict):
+            continue
+        item_type = item.get("type", "")
+        if item_type == "mcp_list_tools":
+            tools = item.get("tools") or []
+            print(f"    server mcp_list_tools: {len(tools)} tools", file=sys.stderr)
+        elif item_type == "mcp_call":
+            name = item.get("name", "?")
+            status = item.get("status", "?")
+            print(f"    server mcp_call: {name} status={status}", file=sys.stderr)
+
+
+def _run_responses(
     base_url: str,
-    tools: list[dict[str, Any]],
     model: str,
+    connector_id: str,
     *,
-    namespace: str,
-    deploy: str,
-    mcp_url: str,
     insecure: bool,
 ) -> None:
-    chat_url = f"{base_url}/v1/chat/completions"
-    messages: list[dict[str, Any]] = [
-        {
-            "role": "user",
-            "content": (
-                "Use the Zabbix tools to list a small sample of monitored hosts "
-                "(at most 5). Return host names and their status. "
-                "You must call a Zabbix tool; do not guess."
-            ),
-        }
-    ]
+    url = f"{base_url}/v1/responses"
     payload: dict[str, Any] = {
         "model": model,
-        "messages": messages,
-        "tools": tools,
-        "tool_choice": "auto",
+        "input": PROMPT,
+        "tools": [_mcp_tool_spec(connector_id)],
+        "max_infer_iters": DEFAULT_MAX_INFER_ITERS,
     }
+    print(f"==> POST {url}", file=sys.stderr)
+    response = _post_json(url, payload, insecure=insecure)
+    _log_mcp_activity(response)
 
-    for turn in range(1, MAX_CHAT_TURNS + 1):
-        print(f"==> chat turn {turn}: POST /v1/chat/completions", file=sys.stderr)
-        response = _post_json(chat_url, payload, insecure=insecure)
-        choice = (response.get("choices") or [{}])[0]
-        message = choice.get("message") or {}
-        tool_calls = message.get("tool_calls") or []
+    output = response.get("output") or []
+    mcp_calls = [i for i in output if isinstance(i, dict) and i.get("type") == "mcp_call"]
+    if not mcp_calls:
+        raise RuntimeError(
+            "Responses API completed without server-side mcp_call items — "
+            "check connector reachability and Llama Stack logs"
+        )
 
-        if not tool_calls:
-            content = message.get("content", "")
-            print("\n=== assistant answer ===")
-            print(content or json.dumps(response, indent=2))
-            return
-
-        messages.append(message)
-        for tc in tool_calls:
-            fn = tc.get("function") or {}
-            tool_name = fn.get("name")
-            raw_args = fn.get("arguments") or "{}"
-            args = json.loads(raw_args) if isinstance(raw_args, str) else raw_args
-            print(f"--- invoking {tool_name}({args}) via Zabbix MCP ---", file=sys.stderr)
-            tool_result = _invoke_zabbix_tool(
-                tool_name,
-                args,
-                namespace=namespace,
-                deploy=deploy,
-                mcp_url=mcp_url,
-            )
-            print(f"--- tool result ({len(tool_result)} chars) ---", file=sys.stderr)
-            print(tool_result[:2000], file=sys.stderr)
-            messages.append(
-                {
-                    "role": "tool",
-                    "tool_call_id": tc.get("id"),
-                    "content": tool_result,
-                }
-            )
-
-        payload = {
-            "model": model,
-            "messages": messages,
-            "tools": tools,
-            "tool_choice": "auto",
-        }
-
-    raise RuntimeError(f"exceeded MAX_CHAT_TURNS={MAX_CHAT_TURNS} without a final answer")
+    answer = _extract_output_text(response)
+    print("\n=== assistant answer ===")
+    print(answer or json.dumps(response, indent=2))
 
 
 def main() -> int:
     parser = argparse.ArgumentParser(
-        description="Test Llama Stack → Zabbix MCP integration for GLAZOS.",
+        description="Test Llama Stack → Zabbix MCP via server-side Responses API.",
     )
     parser.add_argument(
         "--check-only",
         action="store_true",
-        help="Only verify connector and tool group listing (no LLM chat).",
+        help="Only verify connector tool listing (no LLM request).",
     )
     parser.add_argument(
         "--namespace",
@@ -285,20 +226,13 @@ def main() -> int:
     )
     args = parser.parse_args()
 
-    namespace = args.namespace
-    deploy = os.environ.get("LLAMASTACK_DEPLOY", DEFAULT_DEPLOY)
-    mcp_url = os.environ.get("ZABBIX_MCP_URL", DEFAULT_ZABBIX_MCP)
+    connector_id = os.environ.get("ZABBIX_CONNECTOR_ID", DEFAULT_CONNECTOR_ID)
     insecure = os.environ.get("LLAMA_STACK_INSECURE", "1") != "0"
 
-    if not shutil_which("oc"):
-        raise RuntimeError("oc not found in PATH (required for Zabbix MCP tool invoke)")
-
-    base_url = _resolve_base_url(namespace)
+    base_url = _resolve_base_url(args.namespace)
     print(f"==> Llama Stack base URL: {base_url}", file=sys.stderr)
 
-    connector_tools = _check_connectors(base_url, insecure=insecure)
-    toolgroup_tools = _check_toolgroup(base_url, insecure=insecure)
-    tools = toolgroup_tools or connector_tools
+    tools = _check_connectors(base_url, connector_id, insecure=insecure)
 
     if args.check_only:
         print("\n=== sample Zabbix tool names ===")
@@ -312,25 +246,10 @@ def main() -> int:
 
     model = os.environ.get("LLAMA_STACK_MODEL") or _pick_model(base_url, insecure=insecure)
     print(f"==> using model: {model}", file=sys.stderr)
-    _run_chat(
-        base_url,
-        tools,
-        model,
-        namespace=namespace,
-        deploy=deploy,
-        mcp_url=mcp_url,
-        insecure=insecure,
-    )
-    print("\nOK: Zabbix query via Llama Stack completed.", file=sys.stderr)
+    print(f"==> using connector: {connector_id}", file=sys.stderr)
+    _run_responses(base_url, model, connector_id, insecure=insecure)
+    print("\nOK: Zabbix query via Llama Stack Responses API completed.", file=sys.stderr)
     return 0
-
-
-def shutil_which(cmd: str) -> str | None:
-    for path in os.environ.get("PATH", "").split(os.pathsep):
-        candidate = Path(path) / cmd
-        if candidate.is_file() and os.access(candidate, os.X_OK):
-            return str(candidate)
-    return None
 
 
 if __name__ == "__main__":

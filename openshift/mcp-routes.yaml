@@ -1,0 +1,108 @@
+# Edge TLS routes for in-cluster MCP Services (HTTP allowed on insecure edge).
+apiVersion: route.openshift.io/v1
+kind: Route
+metadata:
+  name: github-mcp
+  namespace: glazos
+  labels:
+    app: github-mcp
+    component: mcp
+spec:
+  to:
+    kind: Service
+    name: github-mcp
+  port:
+    targetPort: http
+  tls:
+    termination: edge
+    insecureEdgeTerminationPolicy: Allow
+---
+apiVersion: route.openshift.io/v1
+kind: Route
+metadata:
+  name: kubernetes-mcp
+  namespace: glazos
+  labels:
+    app: kubernetes-mcp
+    component: mcp
+spec:
+  to:
+    kind: Service
+    name: kubernetes-mcp
+  port:
+    targetPort: http
+  tls:
+    termination: edge
+    insecureEdgeTerminationPolicy: Allow
+---
+apiVersion: route.openshift.io/v1
+kind: Route
+metadata:
+  name: aap-mcp-proxy
+  namespace: glazos
+  labels:
+    app: aap-mcp-proxy
+    component: mcp
+spec:
+  to:
+    kind: Service
+    name: aap-mcp-proxy
+  port:
+    targetPort: http
+  tls:
+    termination: edge
+    insecureEdgeTerminationPolicy: Allow
+---
+apiVersion: route.openshift.io/v1
+kind: Route
+metadata:
+  name: linux-mcp
+  namespace: glazos
+  labels:
+    app: linux-mcp
+    component: mcp
+spec:
+  to:
+    kind: Service
+    name: linux-mcp
+  port:
+    targetPort: http
+  tls:
+    termination: edge
+    insecureEdgeTerminationPolicy: Allow
+---
+apiVersion: route.openshift.io/v1
+kind: Route
+metadata:
+  name: satellite-mcp
+  namespace: glazos
+  labels:
+    app: satellite-mcp
+    component: mcp
+spec:
+  to:
+    kind: Service
+    name: satellite-mcp
+  port:
+    targetPort: http
+  tls:
+    termination: edge
+    insecureEdgeTerminationPolicy: Allow
+---
+apiVersion: route.openshift.io/v1
+kind: Route
+metadata:
+  name: zabbix-mcp
+  namespace: glazos
+  labels:
+    app: zabbix-mcp
+    component: mcp
+spec:
+  to:
+    kind: Service
+    name: zabbix-mcp
+  port:
+    targetPort: http
+  tls:
+    termination: edge
+    insecureEdgeTerminationPolicy: Allow

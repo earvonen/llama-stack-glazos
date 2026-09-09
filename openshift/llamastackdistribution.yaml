@@ -27,6 +27,8 @@ spec:
       env:
         - name: SQLITE_STORE_DIR
           value: "/.llama/distributions/starter"
+        - name: FILES_STORAGE_DIR
+          value: "/.llama/distributions/starter/files"
         - name: VLLM_URL
           valueFrom:
             configMapKeyRef:

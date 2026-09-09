@@ -14,6 +14,7 @@ resources:
   - zabbix-mcp.yaml
   - llamastackdistribution.yaml
   - route.yaml
+  - mcp-routes.yaml
 # Secrets, URLs (llamastack-mcp-endpoints), aap-mcp-proxy-nginx-template,
 # satellite-mcp-config, and zabbix-mcp-config are applied from .env by deploy-openshift.sh
 
