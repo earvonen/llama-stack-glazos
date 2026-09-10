@@ -7,7 +7,6 @@ resources:
   - namespace.yaml
   - github-mcp.yaml
   - kubernetes-mcp.yaml
-  - aap-mcp-proxy.yaml
   - linux-mcp.yaml
   - satellite-mcp.yaml
   - zabbix-mcp-build.yaml
@@ -15,12 +14,17 @@ resources:
   - llamastackdistribution.yaml
   - route.yaml
   - mcp-routes.yaml
-# Secrets, URLs (llamastack-mcp-endpoints), aap-mcp-proxy-nginx-template,
-# satellite-mcp-config, and zabbix-mcp-config are applied from .env by deploy-openshift.sh
+# Secrets, URLs (llamastack-mcp-endpoints), llamastack-mcp-patch, satellite-mcp-config,
+# and zabbix-mcp-config are applied from .env / repo files by deploy-openshift.sh
 
 configMapGenerator:
   - name: llamastack-server-config
     files:
       - config.yaml=config/config.yaml
+    options:
+      disableNameSuffixHash: true
+  - name: llamastack-mcp-patch
+    files:
+      - patch_llamastack_aap_mcp.py=../scripts/patch_llamastack_aap_mcp.py
     options:
       disableNameSuffixHash: true

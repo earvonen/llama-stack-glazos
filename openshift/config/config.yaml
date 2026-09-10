@@ -87,30 +87,6 @@ tool_groups:
   provider_id: model-context-protocol
   mcp_endpoint:
     uri: ${env.MCP_OPENSHIFT_SSE_URL:=}
-- toolgroup_id: mcp-aap-jobs
-  provider_id: model-context-protocol
-  mcp_endpoint:
-    uri: ${env.MCP_AAP_JOB_MGMT_URL:=}
-- toolgroup_id: mcp-aap-inventory
-  provider_id: model-context-protocol
-  mcp_endpoint:
-    uri: ${env.MCP_AAP_INVENTORY_MGMT_URL:=}
-- toolgroup_id: mcp-aap-monitoring
-  provider_id: model-context-protocol
-  mcp_endpoint:
-    uri: ${env.MCP_AAP_SYSTEM_MONITOR_URL:=}
-- toolgroup_id: mcp-aap-users
-  provider_id: model-context-protocol
-  mcp_endpoint:
-    uri: ${env.MCP_AAP_USER_MGMT_URL:=}
-- toolgroup_id: mcp-aap-security
-  provider_id: model-context-protocol
-  mcp_endpoint:
-    uri: ${env.MCP_AAP_SECURITY_URL:=}
-- toolgroup_id: mcp-aap-platform
-  provider_id: model-context-protocol
-  mcp_endpoint:
-    uri: ${env.MCP_AAP_PLATFORM_CONFIG_URL:=}
 - toolgroup_id: mcp-linux
   provider_id: model-context-protocol
   mcp_endpoint:
@@ -124,6 +100,8 @@ tool_groups:
   mcp_endpoint:
     uri: ${env.MCP_ZABBIX_URL:=}
 # Connectors populate the Connectors API (GET /v1beta/connectors, …/tools on 0.7.x).
+# AAP toolsets call external URLs from MCP_AAP_* env vars; Bearer auth uses AAP_MCP_TOKEN
+# on the Llama Stack pod (pass ?authorization= or tools[].authorization on API calls).
 connectors:
 - connector_type: mcp
   connector_id: github

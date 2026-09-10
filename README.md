@@ -6,7 +6,7 @@
 |--------|-------------|
 | **G** | **GitHub** — in-cluster MCP (`ghcr.io/github/github-mcp-server`) |
 | **L** | **Linux (RHEL)** — in-cluster Red Hat `linux-mcp-server` |
-| **A** | **Ansible** (Automation Platform) — external AAP MCP via in-cluster nginx auth proxy |
+| **A** | **Ansible** (Automation Platform) — six external AAP MCP toolsets (direct HTTPS from Llama Stack) |
 | **Z** | **Zabbix** — in-cluster initMAX `zabbix-mcp-server` |
 | **O** | **OpenShift** / Kubernetes — in-cluster `kubernetes-mcp-server` |
 | **S** | **Satellite** — in-cluster `foreman-mcp-server` |
@@ -32,17 +32,21 @@ Default namespace: **`glazos`**.
 | `openshift/templates/` | Config templates rendered from `.env` at deploy time |
 | `openshift/github-mcp.yaml` | GitHub MCP + nginx PAT injection |
 | `openshift/kubernetes-mcp.yaml` | OpenShift/Kubernetes MCP + RBAC |
-| `openshift/aap-mcp-proxy.yaml` | nginx proxy to external Ansible AAP MCP |
 | `openshift/linux-mcp.yaml` | Red Hat Linux MCP (HTTP + SSH) |
 | `openshift/satellite-mcp.yaml` | Satellite MCP + nginx Foreman header injection |
 | `openshift/zabbix-mcp.yaml` | Zabbix MCP + nginx Bearer injection |
-| `deploy-openshift.sh` | Deploy with OpenShift `fsGroup` patching |
+| `deploy-openshift.sh` | Deploy with OpenShift `fsGroup` patching; AAP CA trust Secret; legacy proxy cleanup |
+| `scripts/patch_llamastack_aap_mcp.py` | Startup patch for Llama Stack 0.7.x + AAP streamable-http MCP (mounted via ConfigMap) |
 | `test-zabbix-via-llamastack.sh` | Verify Llama Stack → Zabbix MCP (connector tools + optional chat) |
+| `test-aap-via-llamastack.sh` | Verify Llama Stack → AAP MCP (connector tools + Responses API job listing) |
 | `secrets/README.md` | `.env` variables and rotation notes |
 
 ## Configure before deploy
 
 1. **`.env`** — `cp .env.example .env` and set all URLs, tokens, and file paths.
+2. **External AAP MCP** — set `AAP_MCP_BASE_URL`, `AAP_MCP_TOKEN`, and `AAP_MCP_CA_DIR` (or `AAP_MCP_CA_FILE`) when AAP uses a private CA. See [secrets/README.md](secrets/README.md#aap-mcp-token-and-tls-trust).
+
+Removed from the default overlay: in-cluster **`aap-mcp-proxy`** (nginx). Llama Stack calls AAP MCP toolsets over HTTPS directly. Legacy manifests remain under `openshift/aap-mcp-proxy.yaml` for reference only.
 
 ## Deploy
 
@@ -54,7 +58,7 @@ cp .env.example .env   # first time only
 
 Override namespace: `OPENSHIFT_NAMESPACE=my-ns ./deploy-openshift.sh`
 
-MCP tool groups and web search are declared in `openshift/config/config.yaml` (`tool_groups` section) and pick up MCP URLs from the `llamastack-mcp-endpoints` ConfigMap at startup — no separate registration step.
+MCP connectors and web search are declared in `openshift/config/config.yaml` (`connectors` section) and pick up MCP URLs from the `llamastack-mcp-endpoints` ConfigMap at startup — no separate registration step.
 
 ## Verify
 
@@ -67,7 +71,8 @@ From the Llama Stack pod, test MCP reachability:
 
 ```bash
 oc exec -n glazos deploy/llamastack -- curl -sS -o /dev/null -w "%{http_code}\n" http://github-mcp:8080/
-oc exec -n glazos deploy/llamastack -- curl -sS -o /dev/null -w "%{http_code}\n" http://aap-mcp-proxy:8080/job_management/mcp
+source .env && oc exec -n glazos deploy/llamastack -- curl -sk -o /dev/null -w "%{http_code}\n" \
+  -H "Authorization: Bearer ${AAP_MCP_TOKEN}" "${AAP_MCP_BASE_URL}/job_management/mcp"
 ```
 
 Confirm model id (`VLLM_URL` from `.env`):
@@ -77,6 +82,33 @@ source .env && curl -sk "${VLLM_URL}/models"
 ```
 
 Use chat model id `vllm/<model-id-from-vllm>`.
+
+### Integration tests
+
+```bash
+# Zabbix — connector tools and optional Responses API query
+./test-zabbix-via-llamastack.sh --check-only
+
+# AAP — all six connectors (requires AAP_MCP_TOKEN in .env)
+./test-aap-via-llamastack.sh --check-only --all-connectors
+
+# AAP — full Responses API test (lists recent jobs via aap-jobs)
+./test-aap-via-llamastack.sh
+```
+
+AAP tests pass the raw MCP token as `?authorization=` on connector API calls and in `tools[].authorization` for `/v1/responses` (Llama Stack adds the `Bearer` prefix upstream).
+
+## AAP MCP notes (Llama Stack 0.7.x)
+
+External AAP MCP uses **streamable HTTP**, not SSE. RHOAI Llama Stack 0.7.3 has bugs around duplicate MCP `initialize` and missing auth on connector resolution. This repo applies a **startup patch** (`scripts/patch_llamastack_aap_mcp.py`, ConfigMap `llamastack-mcp-patch`) before the server starts.
+
+For TLS to a privately signed AAP MCP endpoint, `deploy-openshift.sh` (at the end of deploy):
+
+1. Merges your signing CA from `AAP_MCP_CA_DIR` / `AAP_MCP_CA_FILE` with the operator CA bundle.
+2. Stores the result in Secret `llamastack-aap-mcp-trust`.
+3. Mounts it at `/etc/ssl/certs/aap-merged-ca-bundle.crt` and sets `SSL_CERT_FILE` in the Llama Stack startup command.
+
+The CA file must be the **signing CA** (`CA:TRUE`), not the AAP server/end-entity certificate.
 
 ## References
 

@@ -23,20 +23,19 @@ cp .env.example .env
 | `VLLM_URL` | MiniMax / vLLM OpenAI base URL (must end with `/v1`) |
 | `MCP_GITHUB_SSE_URL` | In-cluster GitHub MCP (Llama Stack connector) |
 | `MCP_OPENSHIFT_SSE_URL` | In-cluster Kubernetes MCP (SSE) |
-| `MCP_AAP_PROXY_BASE_URL` | In-cluster AAP nginx proxy base URL |
 | `MCP_LINUX_URL` | In-cluster Linux MCP |
 | `MCP_SATELLITE_URL` | In-cluster Satellite MCP |
 | `MCP_ZABBIX_URL` | In-cluster Zabbix MCP |
-| `AAP_MCP_BASE_URL` | External AAP MCP upstream (nginx `proxy_pass`) |
-| `AAP_MCP_HOST` | Host header for external AAP (`proxy_set_header Host`) |
+| `AAP_MCP_BASE_URL` | External AAP MCP base URL (Llama Stack calls `<base>/<toolset>/mcp` directly) |
+| `AAP_MCP_HOST` | Legacy: hostname for removed in-cluster `aap-mcp-proxy` nginx template |
 | `SATELLITE_URL` | External Satellite / Foreman API URL |
 | `ZABBIX_URL` | External Zabbix API URL |
 
-Optional overrides for individual AAP toolset connector URLs (default: `${MCP_AAP_PROXY_BASE_URL}/<toolset>/mcp`):
+Optional overrides for individual AAP toolset connector URLs (default: `${AAP_MCP_BASE_URL}/<toolset>/mcp`):
 
 - `MCP_AAP_JOB_MGMT_URL`, `MCP_AAP_INVENTORY_MGMT_URL`, `MCP_AAP_SYSTEM_MONITOR_URL`, `MCP_AAP_USER_MGMT_URL`, `MCP_AAP_SECURITY_URL`, `MCP_AAP_PLATFORM_CONFIG_URL`
 
-Those same env vars feed `tool_groups` and `connectors` in `openshift/config/config.yaml` at Llama Stack startup.
+Those env vars feed `connectors` in `openshift/config/config.yaml` at Llama Stack startup.
 
 ### Credentials
 
@@ -45,7 +44,9 @@ Those same env vars feed `tool_groups` and `connectors` in `openshift/config/con
 | `VLLM_API_TOKEN` | Llama Stack → MiniMax LLM (default `fake`) |
 | `TAVILY_SEARCH_API_KEY` | Web search (`builtin::websearch`) |
 | `GITHUB_PERSONAL_ACCESS_TOKEN` | GitHub MCP (raw PAT, no `Bearer `) |
-| `AAP_MCP_TOKEN` | AAP MCP proxy (raw token) |
+| `AAP_MCP_TOKEN` | External AAP MCP Bearer token (on Llama Stack pod; pass as `authorization` on MCP API calls) |
+| `AAP_MCP_CA_DIR` | Directory on the **deploy host** with `ca.crt` (signing CA for AAP MCP TLS) |
+| `AAP_MCP_CA_FILE` | Optional PEM file path on the deploy host instead of `AAP_MCP_CA_DIR` |
 | `LINUX_MCP_USER` | Linux MCP SSH user |
 | `LINUX_MCP_KEY_PASSPHRASE` | Optional SSH key passphrase |
 | `LINUX_MCP_SSH_KEY_FILE` | Path to private key file on deploy host |
@@ -62,10 +63,17 @@ Multiline values (SSH keys, CA bundles) use **file paths** on the machine runnin
 
 If a token was shared in chat or email, rotate it on the source system before updating `.env`.
 
-## AAP MCP token
+## AAP MCP token, TLS trust, and startup patch
 
 - Raw token only (no `Bearer ` prefix).
-- The in-cluster `aap-mcp-proxy` nginx sidecar adds `Authorization: Bearer …` when calling `AAP_MCP_BASE_URL`.
+- Stored in Secret `aap-mcp-credentials` and mounted on the Llama Stack pod as `AAP_MCP_TOKEN`.
+- Llama Stack connector URLs point at `${AAP_MCP_BASE_URL}/<toolset>/mcp`. Pass the token when calling MCP:
+  - `GET /v1beta/connectors/<aap-*>/tools?authorization=<token>`
+  - `POST /v1/responses` with `tools[].authorization` for MCP tool entries.
+- **TLS:** set `AAP_MCP_CA_DIR` (directory containing a PEM such as `ca.crt`) or `AAP_MCP_CA_FILE`. The file must be the **signing CA certificate** that issued the AAP MCP server cert (`CA:TRUE`), not the server/end-entity certificate. At the end of deploy, `deploy-openshift.sh` merges it with the operator CA bundle into Secret `llamastack-aap-mcp-trust`, mounted at `/etc/ssl/certs/aap-merged-ca-bundle.crt`, and sets `SSL_CERT_FILE` in the Llama Stack startup command (`openshift/llamastackdistribution.yaml`).
+- **Streamable HTTP patch:** AAP MCP does not support SSE. Llama Stack 0.7.x mishandles streamable-http sessions for connector listing and Responses API connector resolution. ConfigMap `llamastack-mcp-patch` (from `scripts/patch_llamastack_aap_mcp.py`) is mounted into the pod and applied at startup before uvicorn. Remove this when a fixed RHOAI Llama Stack image is available.
+
+Verify with `./test-aap-via-llamastack.sh --check-only --all-connectors`.
 
 ## GitHub PAT
 
