@@ -39,6 +39,7 @@ Default namespace: **`glazos`**.
 | `scripts/patch_llamastack_aap_mcp.py` | Startup patch for Llama Stack 0.7.x + AAP streamable-http MCP (mounted via ConfigMap) |
 | `test-zabbix-via-llamastack.sh` | Verify Llama Stack → Zabbix MCP (connector tools + optional chat) |
 | `test-aap-via-llamastack.sh` | Verify Llama Stack → AAP MCP (connector tools + Responses API job listing) |
+| `test-github-via-llamastack.sh` | Verify Llama Stack → GitHub MCP (connector tools + Responses API issue listing) |
 | `secrets/README.md` | `.env` variables and rotation notes |
 
 ## Configure before deploy
@@ -94,9 +95,15 @@ Use chat model id `vllm/<model-id-from-vllm>`.
 
 # AAP — full Responses API test (lists recent jobs via aap-jobs)
 ./test-aap-via-llamastack.sh
+
+# GitHub — connector tools (PAT injected in-cluster; no authorization on Llama Stack API)
+./test-github-via-llamastack.sh --check-only
+
+# GitHub — full Responses API test (lists open issues in a repo your PAT can read)
+GITHUB_TEST_REPO=owner/repo ./test-github-via-llamastack.sh
 ```
 
-AAP tests pass the raw MCP token as `?authorization=` on connector API calls and in `tools[].authorization` for `/v1/responses` (Llama Stack adds the `Bearer` prefix upstream).
+AAP tests pass the raw MCP token as `?authorization=` on connector API calls and in `tools[].authorization` for `/v1/responses` (Llama Stack adds the `Bearer` prefix upstream). GitHub MCP auth is handled by the in-cluster `github-mcp` nginx sidecar.
 
 ## AAP MCP notes (Llama Stack 0.7.x)
 
