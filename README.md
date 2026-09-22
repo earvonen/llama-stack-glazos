@@ -40,6 +40,7 @@ Default namespace: **`glazos`**.
 | `test-zabbix-via-llamastack.sh` | Verify Llama Stack → Zabbix MCP (connector tools + optional chat) |
 | `test-aap-via-llamastack.sh` | Verify Llama Stack → AAP MCP (connector tools + Responses API job listing) |
 | `test-github-via-llamastack.sh` | Verify Llama Stack → GitHub MCP (connector tools + Responses API issue listing) |
+| `test-openshift-via-llamastack.sh` | Verify Llama Stack → OpenShift MCP (connector tools + Responses API pod listing) |
 | `secrets/README.md` | `.env` variables and rotation notes |
 
 ## Configure before deploy
@@ -101,9 +102,15 @@ Use chat model id `vllm/<model-id-from-vllm>`.
 
 # GitHub — full Responses API test (lists open issues in a repo your PAT can read)
 GITHUB_TEST_REPO=owner/repo ./test-github-via-llamastack.sh
+
+# OpenShift — connector tools (kubernetes-mcp ServiceAccount; no authorization on Llama Stack API)
+./test-openshift-via-llamastack.sh --check-only
+
+# OpenShift — full Responses API test (lists pods in a namespace; default glazos)
+./test-openshift-via-llamastack.sh
 ```
 
-AAP tests pass the raw MCP token as `?authorization=` on connector API calls and in `tools[].authorization` for `/v1/responses` (Llama Stack adds the `Bearer` prefix upstream). GitHub MCP auth is handled by the in-cluster `github-mcp` nginx sidecar.
+AAP tests pass the raw MCP token as `?authorization=` on connector API calls and in `tools[].authorization` for `/v1/responses` (Llama Stack adds the `Bearer` prefix upstream). GitHub MCP auth is handled by the in-cluster `github-mcp` nginx sidecar. OpenShift MCP auth uses the `kubernetes-mcp` ServiceAccount (namespace-scoped read Role by default).
 
 ## AAP MCP notes (Llama Stack 0.7.x)
 
