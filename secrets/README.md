@@ -24,7 +24,7 @@ cp .env.example .env
 | `MCP_GITHUB_SSE_URL` | In-cluster GitHub MCP (Llama Stack connector) |
 | `MCP_OPENSHIFT_SSE_URL` | In-cluster Kubernetes MCP (SSE) |
 | `MCP_LINUX_URL` | In-cluster Linux MCP |
-| `MCP_SATELLITE_URL` | In-cluster Satellite MCP |
+| `MCP_SATELLITE_URL` | In-cluster Satellite MCP (streamable-http: `http://satellite-mcp:8080/mcp`) |
 | `MCP_ZABBIX_URL` | In-cluster Zabbix MCP |
 | `AAP_MCP_BASE_URL` | External AAP MCP base URL (Llama Stack calls `<base>/<toolset>/mcp` directly) |
 | `AAP_MCP_HOST` | Legacy: hostname for removed in-cluster `aap-mcp-proxy` nginx template |

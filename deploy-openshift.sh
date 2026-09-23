@@ -45,7 +45,7 @@ VLLM_URL="${VLLM_URL:-https://llm.example.com/v1}"
 MCP_GITHUB_SSE_URL="${MCP_GITHUB_SSE_URL:-http://github-mcp:8080/}"
 MCP_OPENSHIFT_SSE_URL="${MCP_OPENSHIFT_SSE_URL:-http://kubernetes-mcp:8080/sse}"
 MCP_LINUX_URL="${MCP_LINUX_URL:-http://linux-mcp:8080/mcp}"
-MCP_SATELLITE_URL="${MCP_SATELLITE_URL:-http://satellite-mcp:8080/mcp/sse}"
+MCP_SATELLITE_URL="${MCP_SATELLITE_URL:-http://satellite-mcp:8080/mcp}"
 MCP_ZABBIX_URL="${MCP_ZABBIX_URL:-http://zabbix-mcp:8080/sse}"
 AAP_MCP_BASE_URL="${AAP_MCP_BASE_URL:-https://aap.example.com}"
 AAP_MCP_HOST="${AAP_MCP_HOST:-aap.example.com}"
@@ -173,12 +173,20 @@ if [[ -z "${FSGROUP}" ]]; then
 fi
 
 echo "==> Applying overlay (fsGroup=${FSGROUP})" >&2
-oc kustomize "${KUSTOMIZE_DIR}" \
+# Patch ConfigMap sources scripts/patch_llamastack_aap_mcp.py outside the openshift/
+# root; allow that path for this generate step only.
+oc kustomize "${KUSTOMIZE_DIR}" --load-restrictor LoadRestrictionsNone \
   | sed "s/^\([[:space:]]*fsGroup:\) [0-9][0-9]*/\1 ${FSGROUP}/" \
   | oc apply -f -
 
 echo "==> Deployments in ${NAMESPACE}:" >&2
 oc get deploy,pods -n "${NAMESPACE}"
+
+# Satellite MCP reads FOREMAN_* and ca.pem from Secret + SATELLITE_URL from ConfigMap at
+# container start; restart so redeploys pick up .env credential/URL changes.
+echo "==> Restarting satellite-mcp to pick up Foreman credentials and SATELLITE_URL" >&2
+oc rollout restart deployment/satellite-mcp -n "${NAMESPACE}"
+oc rollout status deployment/satellite-mcp -n "${NAMESPACE}" --timeout=3m
 
 ZABBIX_MCP_IMAGE="${ZABBIX_MCP_IMAGE:-}"
 ZABBIX_MCP_GIT_REF="${ZABBIX_MCP_GIT_REF:-v1.36.1}"
@@ -198,6 +206,7 @@ fi
 # External AAP MCP uses a private CA in many lab installs. Merge the signing CA from
 # AAP_MCP_CA_DIR / AAP_MCP_CA_FILE into Secret llamastack-aap-mcp-trust and reconcile
 # the LlamaStackDistribution (CA mount + startup patch are in llamastackdistribution.yaml).
+# Also restarts llamastack so MCP_* endpoint ConfigMap updates (e.g. Satellite /mcp) apply.
 AAP_MCP_CA_DIR="${AAP_MCP_CA_DIR:-}"
 AAP_MCP_CA_FILE="${AAP_MCP_CA_FILE:-}"
 
@@ -294,6 +303,8 @@ apply_aap_mcp_ca_trust() {
 
   echo "==> Applying LlamaStackDistribution with AAP CA trust mount" >&2
   oc apply -f "${KUSTOMIZE_DIR}/llamastackdistribution.yaml"
+  # Always restart so MCP endpoint ConfigMap changes (Satellite /mcp, etc.) are loaded.
+  oc rollout restart deployment/llamastack -n "${NAMESPACE}"
   oc rollout status deployment/llamastack -n "${NAMESPACE}" --timeout=5m
 }
 
