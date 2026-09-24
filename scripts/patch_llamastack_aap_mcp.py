@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Patch RHOAI llama_stack 0.7.x for external AAP streamable-http MCP.
+"""Patch RHOAI llama_stack 0.7.x for GLAZOS lab needs.
 
 Applied at Llama Stack pod startup from ConfigMap ``llamastack-mcp-patch``
 (see ``openshift/kustomization.yaml`` and ``openshift/llamastackdistribution.yaml``).
@@ -11,6 +11,8 @@ Fixes:
    back to SSE (405).
 2. ``resolve_mcp_connector_id()`` omits authorization when resolving connector URLs.
 3. ``list_connector_tools()`` needlessly calls ``get_connector()`` (server metadata fetch).
+4. Responses API has no stack-wide default system prompt — inject Glazos instructions
+   from ``glazos-system-prompt.txt`` when the request omits ``instructions``.
 """
 from __future__ import annotations
 
@@ -102,6 +104,27 @@ def main() -> None:
         )
 """,
         "resolve_mcp_connector_id",
+    )
+
+    # Default Glazos system prompt when callers omit Responses API "instructions".
+    patch_file(
+        root
+        / "llama_stack/providers/inline/responses/builtin/responses/openai_responses.py",
+        """        stream = bool(stream)
+        background = bool(background)
+        text = OpenAIResponseText(format=OpenAIResponseTextFormat(type="text")) if text is None else text
+""",
+        """        stream = bool(stream)
+        background = bool(background)
+        if not instructions:
+            from pathlib import Path as _Path
+
+            _prompt_path = _Path("/etc/llama-stack/patches/glazos-system-prompt.txt")
+            if _prompt_path.is_file():
+                instructions = _prompt_path.read_text().strip() or None
+        text = OpenAIResponseText(format=OpenAIResponseTextFormat(type="text")) if text is None else text
+""",
+        "default_glazos_instructions",
     )
 
 

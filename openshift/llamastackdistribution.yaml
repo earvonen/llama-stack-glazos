@@ -12,7 +12,8 @@ spec:
       image: registry.redhat.io/rhoai/odh-llama-stack-core-rhel9:v3.4
     userConfig:
       configMapName: llamastack-server-config
-    # AAP MCP: merged CA bundle (Secret from deploy-openshift.sh) + startup patch ConfigMap.
+    # AAP MCP: merged CA bundle (Secret from deploy-openshift.sh) + startup patch ConfigMap
+    # (AAP streamable-http fixes + default Glazos Responses instructions).
     podOverrides:
       volumes:
         - name: aap-mcp-trust

@@ -26,5 +26,6 @@ configMapGenerator:
   - name: llamastack-mcp-patch
     files:
       - patch_llamastack_aap_mcp.py=../scripts/patch_llamastack_aap_mcp.py
+      - glazos-system-prompt.txt=../scripts/glazos-system-prompt.txt
     options:
       disableNameSuffixHash: true

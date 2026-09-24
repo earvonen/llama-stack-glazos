@@ -36,7 +36,8 @@ Default namespace: **`glazos`**.
 | `openshift/satellite-mcp.yaml` | Satellite MCP + nginx Foreman header injection |
 | `openshift/zabbix-mcp.yaml` | Zabbix MCP + nginx Bearer injection |
 | `deploy-openshift.sh` | Deploy with OpenShift `fsGroup` patching; AAP CA trust Secret; legacy proxy cleanup |
-| `scripts/patch_llamastack_aap_mcp.py` | Startup patch for Llama Stack 0.7.x + AAP streamable-http MCP (mounted via ConfigMap) |
+| `scripts/patch_llamastack_aap_mcp.py` | Startup patch for Llama Stack 0.7.x (AAP streamable-http + default Glazos instructions) |
+| `scripts/glazos-system-prompt.txt` | Default Responses API `instructions` (Glazos system prompt) when callers omit it |
 | `test-zabbix-via-llamastack.sh` | Verify Llama Stack → Zabbix MCP (connector tools + optional chat) |
 | `test-aap-via-llamastack.sh` | Verify Llama Stack → AAP MCP (connector tools + Responses API job listing) |
 | `test-github-via-llamastack.sh` | Verify Llama Stack → GitHub MCP (connector tools + Responses API issue listing) |
@@ -114,7 +115,7 @@ AAP tests pass the raw MCP token as `?authorization=` on connector API calls and
 
 ## AAP MCP notes (Llama Stack 0.7.x)
 
-External AAP MCP uses **streamable HTTP**, not SSE. RHOAI Llama Stack 0.7.3 has bugs around duplicate MCP `initialize` and missing auth on connector resolution. This repo applies a **startup patch** (`scripts/patch_llamastack_aap_mcp.py`, ConfigMap `llamastack-mcp-patch`) before the server starts.
+External AAP MCP uses **streamable HTTP**, not SSE. RHOAI Llama Stack 0.7.3 has bugs around duplicate MCP `initialize` and missing auth on connector resolution. This repo applies a **startup patch** (`scripts/patch_llamastack_aap_mcp.py`, ConfigMap `llamastack-mcp-patch`) before the server starts. The same ConfigMap mounts `scripts/glazos-system-prompt.txt`; the patch injects that text as Responses API `instructions` when the client omits `instructions` (override anytime by passing your own).
 
 For TLS to a privately signed AAP MCP endpoint, `deploy-openshift.sh` (at the end of deploy):
 
