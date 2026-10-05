@@ -1,6 +1,12 @@
 version: 2
 distro_name: starter
 # Inference: external MiniMax vLLM-compatible OpenAI /v1 endpoint.
+# Require Bearer token on all Llama Stack API calls (validated by in-cluster custom auth).
+server:
+  auth:
+    provider_config:
+      type: custom
+      endpoint: http://llamastack-api-auth:8080/validate
 apis:
 - inference
 - tool_runtime

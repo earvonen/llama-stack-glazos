@@ -66,7 +66,9 @@ done
 require_cmd curl
 require_cmd jq
 
-curl_args=( -sS -H "Authorization: Bearer none" -H "Accept: application/json" )
+AUTH_TOKEN="${LLAMA_STACK_API_TOKEN:-}"
+[[ -n "$AUTH_TOKEN" ]] || die "set LLAMA_STACK_API_TOKEN (Bearer token for Llama Stack API)"
+curl_args=( -sS -H "Authorization: Bearer ${AUTH_TOKEN}" -H "Accept: application/json" )
 if [[ "$LLAMA_STACK_INSECURE" != "0" ]]; then
   curl_args+=( -k )
 fi

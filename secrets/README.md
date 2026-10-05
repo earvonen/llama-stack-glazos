@@ -41,6 +41,7 @@ Those env vars feed `connectors` in `openshift/config/config.yaml` at Llama Stac
 
 | Variable | Used for |
 |----------|----------|
+| `LLAMA_STACK_API_TOKEN` | Bearer token required by the Llama Stack HTTP API (`Authorization: Bearer …`) |
 | `VLLM_API_TOKEN` | Llama Stack → MiniMax LLM (default `fake`) |
 | `TAVILY_SEARCH_API_KEY` | Web search (`builtin::websearch`) |
 | `GITHUB_PERSONAL_ACCESS_TOKEN` | GitHub MCP (raw PAT, no `Bearer `) |

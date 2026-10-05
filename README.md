@@ -113,6 +113,8 @@ GITHUB_TEST_REPO=owner/repo ./test-github-via-llamastack.sh
 
 AAP tests pass the raw MCP token as `?authorization=` on connector API calls and in `tools[].authorization` for `/v1/responses` (Llama Stack adds the `Bearer` prefix upstream). GitHub MCP auth is handled by the in-cluster `github-mcp` nginx sidecar. OpenShift MCP auth uses the `kubernetes-mcp` ServiceAccount (namespace-scoped read Role by default).
 
+Llama Stack itself requires `Authorization: Bearer ${LLAMA_STACK_API_TOKEN}` on API calls (validated by in-cluster `llamastack-api-auth`). Set the token in `.env` before `./deploy-openshift.sh`.
+
 ## AAP MCP notes (Llama Stack 0.7.x)
 
 External AAP MCP uses **streamable HTTP**, not SSE. RHOAI Llama Stack 0.7.3 has bugs around duplicate MCP `initialize` and missing auth on connector resolution. This repo applies a **startup patch** (`scripts/patch_llamastack_aap_mcp.py`, ConfigMap `llamastack-mcp-patch`) before the server starts. The same ConfigMap mounts `scripts/glazos-system-prompt.txt`; the patch injects that text as Responses API `instructions` when the client omits `instructions` (override anytime by passing your own).

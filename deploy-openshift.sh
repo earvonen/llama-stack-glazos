@@ -91,6 +91,15 @@ apply_literal_secret llamastack-credentials \
   --from-literal=vllm-api-token="${VLLM_API_TOKEN}" \
   --from-literal=tavily-search-api-key="${TAVILY_SEARCH_API_KEY}"
 
+# Shared Bearer token for Llama Stack API (custom auth validator).
+LLAMA_STACK_API_TOKEN="${LLAMA_STACK_API_TOKEN:-}"
+if [[ -z "${LLAMA_STACK_API_TOKEN}" ]]; then
+  echo "error: LLAMA_STACK_API_TOKEN is empty — set it in .env (required for API auth)" >&2
+  exit 1
+fi
+apply_literal_secret llamastack-api-auth \
+  --from-literal=LLAMA_STACK_API_TOKEN="${LLAMA_STACK_API_TOKEN}"
+
 apply_literal_secret github-mcp-pat \
   --from-literal=GITHUB_PERSONAL_ACCESS_TOKEN="${GITHUB_PERSONAL_ACCESS_TOKEN}"
 
@@ -187,6 +196,10 @@ oc get deploy,pods -n "${NAMESPACE}"
 echo "==> Restarting satellite-mcp to pick up Foreman credentials and SATELLITE_URL" >&2
 oc rollout restart deployment/satellite-mcp -n "${NAMESPACE}"
 oc rollout status deployment/satellite-mcp -n "${NAMESPACE}" --timeout=3m
+
+echo "==> Restarting llamastack-api-auth to pick up LLAMA_STACK_API_TOKEN" >&2
+oc rollout restart deployment/llamastack-api-auth -n "${NAMESPACE}"
+oc rollout status deployment/llamastack-api-auth -n "${NAMESPACE}" --timeout=3m
 
 ZABBIX_MCP_IMAGE="${ZABBIX_MCP_IMAGE:-}"
 ZABBIX_MCP_GIT_REF="${ZABBIX_MCP_GIT_REF:-v1.36.1}"

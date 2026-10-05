@@ -11,11 +11,13 @@ resources:
   - satellite-mcp.yaml
   - zabbix-mcp-build.yaml
   - zabbix-mcp.yaml
+  - llamastack-api-auth.yaml
   - llamastackdistribution.yaml
   - route.yaml
   - mcp-routes.yaml
 # Secrets, URLs (llamastack-mcp-endpoints), llamastack-mcp-patch, satellite-mcp-config,
 # and zabbix-mcp-config are applied from .env / repo files by deploy-openshift.sh
+# Secret llamastack-api-auth (LLAMA_STACK_API_TOKEN) is applied by deploy-openshift.sh.
 
 configMapGenerator:
   - name: llamastack-server-config

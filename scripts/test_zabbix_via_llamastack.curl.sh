@@ -11,7 +11,8 @@ set -euo pipefail
 BASE="${LLAMA_STACK_BASE_URL:?set LLAMA_STACK_BASE_URL}"
 MODEL="${LLAMA_STACK_MODEL:?set LLAMA_STACK_MODEL}"
 INSECURE="${LLAMA_STACK_INSECURE:-1}"
-CURL=(curl -sS -H 'Authorization: Bearer none' -H 'Content-Type: application/json' -H 'Accept: application/json')
+TOKEN="${LLAMA_STACK_API_TOKEN:?set LLAMA_STACK_API_TOKEN}"
+CURL=(curl -sS -H "Authorization: Bearer ${TOKEN}" -H 'Content-Type: application/json' -H 'Accept: application/json')
 [[ "$INSECURE" != "0" ]] && CURL+=(-k)
 
 PAYLOAD="$(jq -nc \

@@ -9,6 +9,7 @@
 #
 # Optional env:
 #   LLAMA_STACK_BASE_URL       override Route URL
+#   LLAMA_STACK_API_TOKEN      required Bearer token for Llama Stack API
 #   OPENSHIFT_NAMESPACE        default: glazos
 #   LLAMA_STACK_INSECURE=0     verify TLS
 #   LLAMA_STACK_MODEL          default: first vllm/ model from /v1/models
@@ -17,4 +18,12 @@
 #   MAX_INFER_ITERS            default: 10
 set -euo pipefail
 cd "$(dirname "$0")"
+ROOT="$(pwd)"
+ENV_FILE="${ENV_FILE:-${ROOT}/.env}"
+if [[ -f "${ENV_FILE}" ]]; then
+  set -a
+  # shellcheck disable=SC1090
+  source "${ENV_FILE}"
+  set +a
+fi
 exec bash scripts/test_github_via_llamastack.sh "$@"

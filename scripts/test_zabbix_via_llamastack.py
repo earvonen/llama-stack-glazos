@@ -37,7 +37,7 @@ def _ssl_context(insecure: bool) -> ssl.SSLContext | None:
 def _get_json(url: str, *, insecure: bool = True) -> Any:
     req = urllib.request.Request(
         url,
-        headers={"Authorization": "Bearer none", "Accept": "application/json"},
+        headers={"Authorization": f"Bearer {os.environ['LLAMA_STACK_API_TOKEN']}", "Accept": "application/json"},
         method="GET",
     )
     with urllib.request.urlopen(req, context=_ssl_context(insecure)) as resp:
@@ -50,7 +50,7 @@ def _post_json(url: str, payload: dict[str, Any], *, insecure: bool = True) -> A
         url,
         data=data,
         headers={
-            "Authorization": "Bearer none",
+            "Authorization": f"Bearer {os.environ['LLAMA_STACK_API_TOKEN']}",
             "Content-Type": "application/json",
             "Accept": "application/json",
         },
@@ -214,6 +214,9 @@ def _run_responses(
 
 
 def main() -> int:
+    if not os.environ.get("LLAMA_STACK_API_TOKEN"):
+        print("error: set LLAMA_STACK_API_TOKEN (Bearer token for Llama Stack API)", file=sys.stderr)
+        return 2
     parser = argparse.ArgumentParser(
         description="Test Llama Stack → Zabbix MCP via server-side Responses API.",
     )

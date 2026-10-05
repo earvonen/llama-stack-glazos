@@ -2,3 +2,4 @@ _ref_*/
 .env
 __pycache__/
 *.pyc
+.llama-stack-api-token.tmp
