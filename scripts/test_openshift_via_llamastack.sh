@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
-# Verify GLAZOS Llama Stack → OpenShift/Kubernetes MCP via server-side Responses API.
+# Verify GLAZOS OGX → OpenShift/Kubernetes MCP via server-side Responses API.
 #
 # Steps:
-#   1. Resolve the Llama Stack Route (or use LLAMA_STACK_BASE_URL).
-#   2. GET /v1beta/connectors/openshift/tools — connector reachability (--check-only).
+#   1. Resolve the OGX Route (or use LLAMA_STACK_BASE_URL).
+#   2. GET /v1/connectors/openshift/tools — connector reachability (--check-only).
 #   3. POST /v1/responses — list pods in OPENSHIFT_MCP_TEST_NAMESPACE (full test).
 #
 # Auth uses the kubernetes-mcp ServiceAccount (namespace-scoped read Role in glazos by default).
@@ -68,7 +68,7 @@ require_cmd curl
 require_cmd jq
 
 AUTH_TOKEN="${LLAMA_STACK_API_TOKEN:-}"
-[[ -n "$AUTH_TOKEN" ]] || die "set LLAMA_STACK_API_TOKEN (Bearer token for Llama Stack API)"
+[[ -n "$AUTH_TOKEN" ]] || die "set LLAMA_STACK_API_TOKEN (Bearer token for OGX API)"
 curl_args=( -sS -H "Authorization: Bearer ${AUTH_TOKEN}" -H "Accept: application/json" )
 if [[ "$LLAMA_STACK_INSECURE" != "0" ]]; then
   curl_args+=( -k )
@@ -115,7 +115,7 @@ connector_error_jq='.error.message // .error // empty'
 check_connectors() {
   local base_url="$1"
   local connector_id="$2"
-  local url="${base_url}/v1beta/connectors/${connector_id}/tools"
+  local url="${base_url}/v1/connectors/${connector_id}/tools"
   echo "==> GET ${url}" >&2
   local payload err count
   payload="$(http_get_json "$url")"
@@ -192,7 +192,7 @@ verify_mcp_calls() {
   local response="$1"
   local mcp_calls errors
   mcp_calls="$(jq '[.output[]? | select(.type == "mcp_call")] | length' <<<"$response")"
-  [[ "$mcp_calls" -gt 0 ]] || die "Responses API completed without server-side mcp_call items — check OpenShift connector reachability and Llama Stack logs"
+  [[ "$mcp_calls" -gt 0 ]] || die "Responses API completed without server-side mcp_call items — check OpenShift connector reachability and OGX logs"
 
   errors="$(jq -r '[.output[]? | select(.type == "mcp_call" and (.error != null))] | length' <<<"$response")"
   if [[ "$errors" -gt 0 ]]; then
@@ -246,7 +246,7 @@ run_responses() {
 
 BASE_URL="$(resolve_base_url)"
 CONNECTOR_ID="${OPENSHIFT_CONNECTOR_ID:-$DEFAULT_CONNECTOR_ID}"
-echo "==> Llama Stack base URL: ${BASE_URL}" >&2
+echo "==> OGX base URL: ${BASE_URL}" >&2
 
 TOOLS_PAYLOAD="$(check_connectors "$BASE_URL" "$CONNECTOR_ID")"
 
@@ -268,7 +268,7 @@ if [[ "$CHECK_ONLY" -eq 1 ]]; then
     echo "... and $((total - 15)) more"
   fi
   echo
-  echo "OK: OpenShift MCP tools visible through Llama Stack."
+  echo "OK: OpenShift MCP tools visible through OGX."
   exit 0
 fi
 
@@ -279,4 +279,4 @@ echo "==> using connector: ${CONNECTOR_ID}" >&2
 echo "==> test namespace: ${TEST_NS}" >&2
 run_responses "$BASE_URL" "$MODEL" "$CONNECTOR_ID" "$TEST_NS"
 echo
-echo "OK: OpenShift MCP query via Llama Stack Responses API completed." >&2
+echo "OK: OpenShift MCP query via OGX Responses API completed." >&2

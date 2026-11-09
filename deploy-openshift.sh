@@ -26,6 +26,13 @@ set -a
 source "${ENV_FILE}"
 set +a
 
+# OGX operator watches ConfigMaps/Secrets labeled ogx.io/watch=true.
+label_ogx_watch() {
+  local kind="$1"
+  local name="$2"
+  oc label "${kind}" "${name}" -n "${NAMESPACE}" ogx.io/watch=true --overwrite >/dev/null
+}
+
 apply_literal_secret() {
   local secret_name="$1"
   shift
@@ -33,6 +40,7 @@ apply_literal_secret() {
   oc create secret generic "${secret_name}" -n "${NAMESPACE}" \
     "${literals[@]}" \
     --dry-run=client -o yaml | oc apply -f -
+  label_ogx_watch secret "${secret_name}"
 }
 
 echo "==> Ensuring namespace ${NAMESPACE} exists" >&2
@@ -50,7 +58,7 @@ MCP_ZABBIX_URL="${MCP_ZABBIX_URL:-http://zabbix-mcp:8080/sse}"
 AAP_MCP_BASE_URL="${AAP_MCP_BASE_URL:-https://aap.example.com}"
 AAP_MCP_HOST="${AAP_MCP_HOST:-aap.example.com}"
 
-# Llama Stack calls external AAP MCP toolsets directly (Bearer token from AAP_MCP_TOKEN on the pod).
+# OGX calls external AAP MCP toolsets directly (Bearer token from AAP_MCP_TOKEN on the pod).
 AAP_MCP_DIRECT_BASE="${AAP_MCP_BASE_URL%/}"
 MCP_AAP_JOB_MGMT_URL="${MCP_AAP_JOB_MGMT_URL:-${AAP_MCP_DIRECT_BASE}/job_management/mcp}"
 MCP_AAP_INVENTORY_MGMT_URL="${MCP_AAP_INVENTORY_MGMT_URL:-${AAP_MCP_DIRECT_BASE}/inventory_management/mcp}"
@@ -86,12 +94,13 @@ oc create configmap llamastack-mcp-endpoints -n "${NAMESPACE}" \
   --from-literal=MCP_SATELLITE_URL="${MCP_SATELLITE_URL}" \
   --from-literal=MCP_ZABBIX_URL="${MCP_ZABBIX_URL}" \
   --dry-run=client -o yaml | oc apply -f -
+label_ogx_watch configmap llamastack-mcp-endpoints
 
 apply_literal_secret llamastack-credentials \
   --from-literal=vllm-api-token="${VLLM_API_TOKEN}" \
   --from-literal=tavily-search-api-key="${TAVILY_SEARCH_API_KEY}"
 
-# Shared Bearer token for Llama Stack API (custom auth validator).
+# Shared Bearer token for OGX API (custom auth validator).
 LLAMA_STACK_API_TOKEN="${LLAMA_STACK_API_TOKEN:-}"
 if [[ -z "${LLAMA_STACK_API_TOKEN}" ]]; then
   echo "error: LLAMA_STACK_API_TOKEN is empty — set it in .env (required for API auth)" >&2
@@ -218,7 +227,7 @@ fi
 
 # External AAP MCP uses a private CA in many lab installs. Merge the signing CA from
 # AAP_MCP_CA_DIR / AAP_MCP_CA_FILE into Secret llamastack-aap-mcp-trust and reconcile
-# the LlamaStackDistribution (CA mount + startup patch are in llamastackdistribution.yaml).
+# the OGXServer (CA mount + startup patch are in ogxserver.yaml).
 # Also restarts llamastack so MCP_* endpoint ConfigMap updates (e.g. Satellite /mcp) apply.
 AAP_MCP_CA_DIR="${AAP_MCP_CA_DIR:-}"
 AAP_MCP_CA_FILE="${AAP_MCP_CA_FILE:-}"
@@ -278,17 +287,19 @@ apply_aap_mcp_ca_trust() {
   echo "==> Appending AAP MCP CA to llamastack trust Secret" >&2
   current="$(mktemp)"
   merged="$(mktemp)"
-  llama_image="${LLAMASTACK_IMAGE:-registry.redhat.io/rhoai/odh-llama-stack-core-rhel9:v3.4}"
+  ogx_image="${LLAMASTACK_IMAGE:-registry.redhat.io/rhoai/odh-ogx-core-rhel9:v3.5}"
 
   if oc get configmap llamastack-ca-bundle -n "${NAMESPACE}" >/dev/null 2>&1; then
     oc get configmap llamastack-ca-bundle -n "${NAMESPACE}" -o jsonpath='{.data.ca-bundle\.crt}' >"${current}"
   elif oc exec -n "${NAMESPACE}" deploy/llamastack -- cat /etc/ssl/certs/ca-bundle/ca-bundle.crt >"${current}" 2>/dev/null; then
     :
+  elif oc exec -n "${NAMESPACE}" deploy/llamastack -- cat /etc/pki/tls/certs/ca-bundle.crt >"${current}" 2>/dev/null; then
+    :
   else
     echo "warning: llamastack pod unavailable — extracting system CA bundle via temporary pod" >&2
     oc run aap-ca-bundle-extract -n "${NAMESPACE}" --rm -i --restart=Never \
-      --image="${llama_image}" \
-      --overrides="$(jq -n --arg img "${llama_image}" '{
+      --image="${ogx_image}" \
+      --overrides="$(jq -n --arg img "${ogx_image}" '{
         spec: {
           containers: [{
             name: "aap-ca-bundle-extract",
@@ -312,10 +323,13 @@ apply_aap_mcp_ca_trust() {
   oc delete secret llamastack-aap-mcp-trust -n "${NAMESPACE}" --ignore-not-found
   oc create secret generic llamastack-aap-mcp-trust -n "${NAMESPACE}" \
     --from-file=ca-bundle.crt="${merged}"
+  label_ogx_watch secret llamastack-aap-mcp-trust
   rm -f "${current}" "${merged}"
 
-  echo "==> Applying LlamaStackDistribution with AAP CA trust mount" >&2
-  oc apply -f "${KUSTOMIZE_DIR}/llamastackdistribution.yaml"
+  echo "==> Applying OGXServer with AAP CA trust mount" >&2
+  # Drop legacy LlamaStackDistribution if still present from a 3.4 install.
+  oc delete llamastackdistribution.llamastack.io llamastack -n "${NAMESPACE}" --ignore-not-found
+  oc apply -f "${KUSTOMIZE_DIR}/ogxserver.yaml"
   # Always restart so MCP endpoint ConfigMap changes (Satellite /mcp, etc.) are loaded.
   oc rollout restart deployment/llamastack -n "${NAMESPACE}"
   oc rollout status deployment/llamastack -n "${NAMESPACE}" --timeout=5m

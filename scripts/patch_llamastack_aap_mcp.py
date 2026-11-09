@@ -1,18 +1,15 @@
 #!/usr/bin/env python3
-"""Patch RHOAI llama_stack 0.7.x for GLAZOS lab needs.
+"""Optional OGX client patches for GLAZOS lab needs.
 
-Applied at Llama Stack pod startup from ConfigMap ``llamastack-mcp-patch``
-(see ``openshift/kustomization.yaml`` and ``openshift/llamastackdistribution.yaml``).
+Applied at OGX pod startup from ConfigMap ``llamastack-mcp-patch``
+(see ``openshift/kustomization.yaml`` and ``openshift/ogxserver.yaml``).
 
-Fixes:
+External AAP MCP servers are unchanged; these patches only touch the in-pod
+``ogx`` package (MCP client + Responses defaults).
 
-1. ``get_mcp_server_info()`` calls ``initialize()`` after ``client_wrapper`` already
-   initialized the session — AAP rejects the second initialize and Llama Stack falls
-   back to SSE (405).
-2. ``resolve_mcp_connector_id()`` omits authorization when resolving connector URLs.
-3. ``list_connector_tools()`` needlessly calls ``get_connector()`` (server metadata fetch).
-4. Responses API has no stack-wide default system prompt — inject Glazos instructions
-   from ``glazos-system-prompt.txt`` when the request omits ``instructions``.
+1–3 are best-effort streamable-HTTP / connector workarounds (skip if upstream
+already fixed the matching source). 4 always injects Glazos default instructions
+when Responses omits ``instructions``.
 """
 from __future__ import annotations
 
@@ -21,21 +18,34 @@ import sys
 from pathlib import Path
 
 
+PROMPT_PATH = Path("/etc/ogx/patches/glazos-system-prompt.txt")
+
+
 def site_packages() -> Path:
     for path in site.getsitepackages():
         candidate = Path(path)
-        if (candidate / "llama_stack").is_dir():
+        if (candidate / "ogx").is_dir():
             return candidate
-    raise SystemExit("llama_stack site-packages not found")
+    raise SystemExit("ogx site-packages not found")
 
 
-def patch_file(path: Path, old: str, new: str, label: str) -> None:
+def patch_file(path: Path, old: str, new: str, label: str, *, required: bool) -> None:
+    if not path.is_file():
+        msg = f"patch {label}: file not found ({path})"
+        if required:
+            raise SystemExit(msg)
+        print(f"warning: {msg} — skipping", file=sys.stderr)
+        return
     text = path.read_text()
     if new in text:
         print(f"patch {label}: already applied")
         return
     if old not in text:
-        raise SystemExit(f"patch {label}: target not found in {path}")
+        msg = f"patch {label}: target not found in {path}"
+        if required:
+            raise SystemExit(msg)
+        print(f"warning: {msg} — skipping (likely fixed upstream)", file=sys.stderr)
+        return
     path.write_text(text.replace(old, new, 1))
     print(f"patch {label}: applied")
 
@@ -43,8 +53,9 @@ def patch_file(path: Path, old: str, new: str, label: str) -> None:
 def main() -> None:
     root = site_packages()
 
+    # Best-effort: duplicate MCP initialize breaks streamable-http (external AAP).
     patch_file(
-        root / "llama_stack/providers/utils/tools/mcp.py",
+        root / "ogx/providers/utils/tools/mcp.py",
         """    async with client_wrapper(endpoint, final_headers) as session:
         init_result = await session.initialize()
 
@@ -75,10 +86,11 @@ def main() -> None:
         )
 """,
         "get_mcp_server_info",
+        required=False,
     )
 
     patch_file(
-        root / "llama_stack/core/connectors/connectors.py",
+        root / "ogx/core/connectors/connectors.py",
         """        connector = await self.get_connector(
             GetConnectorRequest(connector_id=request.connector_id), authorization=authorization
         )
@@ -91,11 +103,11 @@ def main() -> None:
         tools = await list_mcp_tools(endpoint=connector.url, authorization=authorization)
 """,
         "list_connector_tools",
+        required=False,
     )
 
     patch_file(
-        root
-        / "llama_stack/providers/inline/responses/builtin/responses/streaming.py",
+        root / "ogx/providers/inline/responses/builtin/responses/streaming.py",
         """        connector = await connectors_api.get_connector(GetConnectorRequest(connector_id=mcp_tool.connector_id))
 """,
         """        connector = await connectors_api.get_connector(
@@ -104,27 +116,30 @@ def main() -> None:
         )
 """,
         "resolve_mcp_connector_id",
+        required=False,
     )
 
-    # Default Glazos system prompt when callers omit Responses API "instructions".
+    # Required product default: Glazos system prompt when callers omit instructions.
     patch_file(
-        root
-        / "llama_stack/providers/inline/responses/builtin/responses/openai_responses.py",
+        root / "ogx/providers/inline/responses/builtin/responses/openai_responses.py",
         """        stream = bool(stream)
         background = bool(background)
         text = OpenAIResponseText(format=OpenAIResponseTextFormat(type="text")) if text is None else text
 """,
-        """        stream = bool(stream)
+        f"""        stream = bool(stream)
         background = bool(background)
         if not instructions:
             from pathlib import Path as _Path
 
-            _prompt_path = _Path("/etc/llama-stack/patches/glazos-system-prompt.txt")
+            _prompt_path = _Path("{PROMPT_PATH}")
             if _prompt_path.is_file():
                 instructions = _prompt_path.read_text().strip() or None
         text = OpenAIResponseText(format=OpenAIResponseTextFormat(type="text")) if text is None else text
 """,
         "default_glazos_instructions",
+        # Soft: OGX minor releases may reshape openai_responses.py; boot anyway and
+        # pass instructions explicitly until the snippet is refreshed.
+        required=False,
     )
 
 

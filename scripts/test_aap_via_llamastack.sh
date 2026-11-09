@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
-# Verify GLAZOS Llama Stack → Ansible Automation Platform MCP via Responses API.
+# Verify GLAZOS OGX → Ansible Automation Platform MCP via Responses API.
 #
 # Steps:
-#   1. Resolve the Llama Stack Route (or use LLAMA_STACK_BASE_URL).
-#   2. GET /v1beta/connectors/<aap-*>/tools — connector reachability (--check-only).
+#   1. Resolve the OGX Route (or use LLAMA_STACK_BASE_URL).
+#   2. GET /v1/connectors/<aap-*>/tools — connector reachability (--check-only).
 #   3. POST /v1/responses — ask the model to list recent jobs via aap-jobs (full test).
 #
 # Requires: curl, jq, oc (unless LLAMA_STACK_BASE_URL is set).
@@ -82,7 +82,7 @@ require_cmd curl
 require_cmd jq
 
 AUTH_TOKEN="${LLAMA_STACK_API_TOKEN:-}"
-[[ -n "$AUTH_TOKEN" ]] || die "set LLAMA_STACK_API_TOKEN (Bearer token for Llama Stack API)"
+[[ -n "$AUTH_TOKEN" ]] || die "set LLAMA_STACK_API_TOKEN (Bearer token for OGX API)"
 curl_args=( -sS -H "Authorization: Bearer ${AUTH_TOKEN}" -H "Accept: application/json" )
 if [[ "$LLAMA_STACK_INSECURE" != "0" ]]; then
   curl_args+=( -k )
@@ -129,7 +129,7 @@ connector_error_jq='.error.message // .error // empty'
 connector_tools_url() {
   local base_url="$1"
   local connector_id="$2"
-  local url="${base_url}/v1beta/connectors/${connector_id}/tools"
+  local url="${base_url}/v1/connectors/${connector_id}/tools"
   if [[ -n "${AAP_MCP_AUTHORIZATION:-}" ]]; then
     url+="?authorization=$(jq -rn --arg v "${AAP_MCP_AUTHORIZATION}" '$v|@uri')"
   fi
@@ -228,7 +228,7 @@ verify_mcp_calls() {
   local response="$1"
   local mcp_calls errors
   mcp_calls="$(jq '[.output[]? | select(.type == "mcp_call")] | length' <<<"$response")"
-  [[ "$mcp_calls" -gt 0 ]] || die "Responses API completed without server-side mcp_call items — check AAP connector reachability and Llama Stack logs"
+  [[ "$mcp_calls" -gt 0 ]] || die "Responses API completed without server-side mcp_call items — check AAP connector reachability and OGX logs"
 
   errors="$(jq -r '[.output[]? | select(.type == "mcp_call" and (.error != null))] | length' <<<"$response")"
   if [[ "$errors" -gt 0 ]]; then
@@ -316,12 +316,12 @@ check_all_connectors() {
     die "${failed} AAP connector(s) failed — check AAP_MCP_BASE_URL, AAP_MCP_TOKEN in .env, and AAP MCP reachability"
   fi
   echo
-  echo "OK: all AAP connectors reachable through Llama Stack."
+  echo "OK: all AAP connectors reachable through OGX."
 }
 
 BASE_URL="$(resolve_base_url)"
 CONNECTOR_ID="${AAP_CONNECTOR_ID:-$DEFAULT_CONNECTOR_ID}"
-echo "==> Llama Stack base URL: ${BASE_URL}" >&2
+echo "==> OGX base URL: ${BASE_URL}" >&2
 
 if [[ "$CHECK_ONLY" -eq 1 ]]; then
   if [[ "$CHECK_ALL" -eq 1 ]]; then
@@ -331,7 +331,7 @@ if [[ "$CHECK_ONLY" -eq 1 ]]; then
   TOOLS_PAYLOAD="$(fetch_connector_tools "$BASE_URL" "$CONNECTOR_ID")"
   print_sample_tools "$TOOLS_PAYLOAD"
   echo
-  echo "OK: AAP tools visible through Llama Stack (connector: ${CONNECTOR_ID})."
+  echo "OK: AAP tools visible through OGX (connector: ${CONNECTOR_ID})."
   exit 0
 fi
 
@@ -341,4 +341,4 @@ echo "==> using model: ${MODEL}" >&2
 echo "==> using connector: ${CONNECTOR_ID}" >&2
 run_responses "$BASE_URL" "$MODEL" "$CONNECTOR_ID"
 echo
-echo "OK: AAP query via Llama Stack Responses API completed." >&2
+echo "OK: AAP query via OGX Responses API completed." >&2

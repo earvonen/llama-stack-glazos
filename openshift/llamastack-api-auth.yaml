@@ -1,5 +1,5 @@
-# In-cluster custom auth validator for Llama Stack server.auth (type: custom).
-# Llama Stack POSTs {"api_key":"<bearer>","request":{...}} to /validate.
+# In-cluster custom auth validator for OGX server.auth (type: custom).
+# OGX POSTs {"api_key":"<bearer>","request":{...}} to /validate.
 # Returns 200 when api_key matches Secret llamastack-api-auth.
 apiVersion: v1
 kind: ConfigMap
@@ -32,7 +32,7 @@ data:
                 return
             api_key = body.get("api_key") or ""
             if EXPECTED and api_key == EXPECTED:
-                # Llama Stack 0.7 CustomAuthProvider AuthResponse shape
+                # OGX CustomAuthProvider AuthResponse shape (principal + attributes)
                 payload = {
                     "principal": "glazos",
                     "attributes": {"roles": ["glazos"]},

@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
-"""Verify GLAZOS Llama Stack can reach Zabbix via server-side Responses API orchestration.
+"""Verify GLAZOS OGX can reach Zabbix via server-side Responses API orchestration.
 
 Steps:
-  1. Resolve the Llama Stack Route (or use LLAMA_STACK_BASE_URL).
-  2. GET /v1beta/connectors/zabbix/tools — connector reachability (--check-only).
-  3. POST /v1/responses — single prompt; Llama Stack executes Zabbix MCP server-side.
+  1. Resolve the OGX Route (or use LLAMA_STACK_BASE_URL).
+  2. GET /v1/connectors/zabbix/tools — connector reachability (--check-only).
+  3. POST /v1/responses — single prompt; OGX executes Zabbix MCP server-side.
 
 Single curl (see scripts/test_zabbix_via_llamastack.curl.sh; set LLAMA_STACK_BASE_URL and LLAMA_STACK_MODEL):
 """
@@ -128,7 +128,7 @@ def _tools_to_openai(tools_payload: Any) -> list[dict[str, Any]]:
 
 
 def _check_connectors(base_url: str, connector_id: str, *, insecure: bool) -> list[dict[str, Any]]:
-    url = f"{base_url}/v1beta/connectors/{connector_id}/tools"
+    url = f"{base_url}/v1/connectors/{connector_id}/tools"
     print(f"==> GET {url}", file=sys.stderr)
     payload = _get_json(url, insecure=insecure)
     tools = _tools_to_openai(payload)
@@ -205,7 +205,7 @@ def _run_responses(
     if not mcp_calls:
         raise RuntimeError(
             "Responses API completed without server-side mcp_call items — "
-            "check connector reachability and Llama Stack logs"
+            "check connector reachability and OGX logs"
         )
 
     answer = _extract_output_text(response)
@@ -215,10 +215,10 @@ def _run_responses(
 
 def main() -> int:
     if not os.environ.get("LLAMA_STACK_API_TOKEN"):
-        print("error: set LLAMA_STACK_API_TOKEN (Bearer token for Llama Stack API)", file=sys.stderr)
+        print("error: set LLAMA_STACK_API_TOKEN (Bearer token for OGX API)", file=sys.stderr)
         return 2
     parser = argparse.ArgumentParser(
-        description="Test Llama Stack → Zabbix MCP via server-side Responses API.",
+        description="Test OGX → Zabbix MCP via server-side Responses API.",
     )
     parser.add_argument(
         "--check-only",
@@ -235,7 +235,7 @@ def main() -> int:
     insecure = os.environ.get("LLAMA_STACK_INSECURE", "1") != "0"
 
     base_url = _resolve_base_url(args.namespace)
-    print(f"==> Llama Stack base URL: {base_url}", file=sys.stderr)
+    print(f"==> OGX base URL: {base_url}", file=sys.stderr)
 
     tools = _check_connectors(base_url, connector_id, insecure=insecure)
 
@@ -246,14 +246,14 @@ def main() -> int:
             print(name)
         if len(names) > 15:
             print(f"... and {len(names) - 15} more")
-        print("\nOK: Zabbix tools visible through Llama Stack.")
+        print("\nOK: Zabbix tools visible through OGX.")
         return 0
 
     model = os.environ.get("LLAMA_STACK_MODEL") or _pick_model(base_url, insecure=insecure)
     print(f"==> using model: {model}", file=sys.stderr)
     print(f"==> using connector: {connector_id}", file=sys.stderr)
     _run_responses(base_url, model, connector_id, insecure=insecure)
-    print("\nOK: Zabbix query via Llama Stack Responses API completed.", file=sys.stderr)
+    print("\nOK: Zabbix query via OGX Responses API completed.", file=sys.stderr)
     return 0
 
 

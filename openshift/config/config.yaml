@@ -1,7 +1,7 @@
 version: 2
 distro_name: starter
 # Inference: external MiniMax vLLM-compatible OpenAI /v1 endpoint.
-# Require Bearer token on all Llama Stack API calls (validated by in-cluster custom auth).
+# Require Bearer token on all OGX API calls (validated by in-cluster custom auth).
 server:
   auth:
     provider_config:
@@ -40,7 +40,7 @@ providers:
   - provider_id: builtin-files
     provider_type: inline::localfs
     config:
-      storage_dir: ${env.FILES_STORAGE_DIR:=~/.llama/distributions/starter/files}
+      storage_dir: ${env.FILES_STORAGE_DIR:=~/.ogx/distributions/starter/files}
       metadata_store:
         table_name: files_metadata
         backend: sql_default
@@ -59,10 +59,10 @@ storage:
   backends:
     kv_default:
       type: kv_sqlite
-      db_path: ${env.SQLITE_STORE_DIR:=~/.llama/distributions/starter}/kvstore.db
+      db_path: ${env.SQLITE_STORE_DIR:=~/.ogx/distributions/starter}/kvstore.db
     sql_default:
       type: sql_sqlite
-      db_path: ${env.SQLITE_STORE_DIR:=~/.llama/distributions/starter}/sql_store.db
+      db_path: ${env.SQLITE_STORE_DIR:=~/.ogx/distributions/starter}/sql_store.db
       pool_pre_ping: true
   stores:
     metadata:
@@ -105,9 +105,9 @@ tool_groups:
   provider_id: model-context-protocol
   mcp_endpoint:
     uri: ${env.MCP_ZABBIX_URL:=}
-# Connectors populate the Connectors API (GET /v1beta/connectors, …/tools on 0.7.x).
+# Connectors populate the Connectors API (GET /v1/connectors, …/tools on OGX 1.1.x).
 # AAP toolsets call external URLs from MCP_AAP_* env vars; Bearer auth uses AAP_MCP_TOKEN
-# on the Llama Stack pod (pass ?authorization= or tools[].authorization on API calls).
+# on the OGX pod (pass ?authorization= or tools[].authorization on API calls).
 connectors:
 - connector_type: mcp
   connector_id: github

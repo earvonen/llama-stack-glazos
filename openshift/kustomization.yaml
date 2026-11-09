@@ -12,7 +12,7 @@ resources:
   - zabbix-mcp-build.yaml
   - zabbix-mcp.yaml
   - llamastack-api-auth.yaml
-  - llamastackdistribution.yaml
+  - ogxserver.yaml
   - route.yaml
   - mcp-routes.yaml
 # Secrets, URLs (llamastack-mcp-endpoints), llamastack-mcp-patch, satellite-mcp-config,
@@ -25,9 +25,13 @@ configMapGenerator:
       - config.yaml=config/config.yaml
     options:
       disableNameSuffixHash: true
+      labels:
+        ogx.io/watch: "true"
   - name: llamastack-mcp-patch
     files:
       - patch_llamastack_aap_mcp.py=../scripts/patch_llamastack_aap_mcp.py
       - glazos-system-prompt.txt=../scripts/glazos-system-prompt.txt
     options:
       disableNameSuffixHash: true
+      labels:
+        ogx.io/watch: "true"
